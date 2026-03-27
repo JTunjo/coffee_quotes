@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -282,10 +281,14 @@ function addRfqItem() {
   div.innerHTML = `
     <div><label>Variedad</label><input placeholder="Ej. Geisha" data-field="variedad" /></div>
     <div><label>Origen</label><input placeholder="Ej. Huila" data-field="origen" /></div>
-    <div><label>Cantidad kg</label><input type="number" min="1" value="100" data-field="cantidad_kg" /></div>
+    <div><label>Cantidad (unidades)</label><input type="number" min="1" value="100" data-field="cantidad_unidades" /></div>
     <div><label>Presentación</label>
       <select data-field="presentacion">
-        <option>verde</option><option>tostado</option><option>molido</option>
+        <option value="250g">250g — costo/kg ÷ 4</option>
+        <option value="500g">500g — costo/kg ÷ 2</option>
+        <option value="1Kg" selected>1 Kg — costo/kg</option>
+        <option value="12Kg">12 Kg — costo/kg × 12</option>
+        <option value="Granel">Granel — costo/kg × kg pedidos</option>
       </select>
     </div>
     <div><label>Tier</label>
@@ -396,10 +399,13 @@ function renderCotizacion({ cotizacion, items, costos }) {
   section.innerHTML = '';
 
   items.forEach(item => {
-    const itemCostos = costos.filter(c => c.cot_item_id === item.cot_item_id);
-    const totalCostos = itemCostos.reduce((s, c) => s + parseFloat(c.valor_usd_kg || 0), 0);
-    const precioFinal = parseFloat(item.costo_lote_kg || 0) + totalCostos;
-    const totalUsd    = precioFinal * parseFloat(item.cantidad_kg || 0);
+    const itemCostos     = costos.filter(c => c.cot_item_id === item.cot_item_id);
+    const sumaCostosKg   = itemCostos.reduce((s, c) => s + parseFloat(c.valor_usd_kg || 0), 0);
+    const precioFinalKg  = parseFloat(item.costo_lote_kg || 0) + sumaCostosKg;
+    const factor         = factorPresentacion(item.presentacion, item.cantidad_unidades);
+    const precioUnitario = precioFinalKg * factor;
+    const cantidad       = parseFloat(item.cantidad_unidades || 0);
+    const totalUsd       = item.presentacion === 'Granel' ? precioUnitario : precioUnitario * cantidad;
 
     const card = document.createElement('div');
     card.className = 'card';
@@ -411,14 +417,16 @@ function renderCotizacion({ cotizacion, items, costos }) {
       </div>
       <div class="form-grid" style="margin-bottom:.75rem">
         <div><label>Lote ID</label><span>${item.lote_id || '—'}</span></div>
-        <div><label>Cantidad (kg)</label><span>${item.cantidad_kg}</span></div>
-        <div><label>Costo lote (USD/kg)</label><span>$${parseFloat(item.costo_lote_kg||0).toFixed(4)}</span></div>
-        <div><label>Precio final (USD/kg)</label><strong id="pf-${item.cot_item_id}">$${precioFinal.toFixed(4)}</strong></div>
-        <div><label>Total (USD)</label><strong id="tot-${item.cot_item_id}">$${totalUsd.toFixed(2)}</strong></div>
+        <div><label>Presentación</label><span>${item.presentacion}</span></div>
+        <div><label>Cantidad</label><span>${item.cantidad_unidades} ${labelUnidad(item.presentacion)}</span></div>
+        <div><label>Costo lote (USD/kg)</label><span>${parseFloat(item.costo_lote_kg||0).toFixed(4)}</span></div>
+        <div><label>Precio/kg final</label><strong id="pf-${item.cot_item_id}">${precioFinalKg.toFixed(4)}</strong></div>
+        <div><label>Precio/${labelUnidad(item.presentacion)}</label><strong id="pu-${item.cot_item_id}">${precioUnitario.toFixed(4)}</strong></div>
+        <div><label>Total (USD)</label><strong id="tot-${item.cot_item_id}">${totalUsd.toFixed(2)}</strong></div>
       </div>
       <div class="tbl-wrap">
         <table>
-          <thead><tr><th>Costo</th><th>Tipo</th><th>USD/kg</th><th>Subtotal</th></tr></thead>
+          <thead><tr><th>Costo</th><th>Tipo</th><th>USD/kg</th><th>Factor</th><th>Subtotal</th></tr></thead>
           <tbody id="costos-body-${item.cot_item_id}">
             ${itemCostos.map(c => renderCostoRow(c, item)).join('')}
           </tbody>
@@ -442,13 +450,15 @@ function renderCostoRow(c, item) {
           value="${parseFloat(c.valor_usd_kg||0).toFixed(4)}"
           data-costo-id="${c.costo_id}"
           data-item-id="${item.cot_item_id}"
-          data-cantidad="${item.cantidad_kg}"
+          data-cantidad="${item.cantidad_unidades}"
+          data-presentacion="${item.presentacion}"
           data-lote-costo="${item.costo_lote_kg}"
           onchange="onCostoChange(this)"
           style="width:100px"
         />
       </td>
-      <td id="sub-${c.costo_id}">$${(parseFloat(c.valor_usd_kg||0) * parseFloat(item.cantidad_kg||0)).toFixed(2)}</td>
+      <td class="text-muted" style="font-size:.75rem">× ${factorPresentacion(item.presentacion, item.cantidad_unidades).toFixed(4)} kg</td>
+      <td id="sub-${c.costo_id}">${(parseFloat(c.valor_usd_kg||0) * factorPresentacion(item.presentacion, item.cantidad_unidades) * (item.presentacion === 'Granel' ? 1 : parseFloat(item.cantidad_unidades||0))).toFixed(2)}</td>
     </tr>
   `;
 }
@@ -457,33 +467,38 @@ function onCostoChange(input) {
   const costoId   = input.dataset.costoId;
   const itemId    = input.dataset.itemId;
   const cantidad  = parseFloat(input.dataset.cantidad || 0);
+  const presentacion = input.dataset.presentacion;
   const loteCosto = parseFloat(input.dataset.loteCosto || 0);
   const newVal    = parseFloat(input.value || 0);
 
-  // Registrar edición pendiente
   pendingEdits[costoId] = { costo_id: costoId, valor_usd_kg: newVal, cot_item_id: itemId };
 
-  // Actualizar subtotal inline
-  document.getElementById(`sub-${costoId}`).textContent = `$${(newVal * cantidad).toFixed(2)}`;
+  // Subtotal de esta línea = valor/kg × factor
+  const factor = factorPresentacion(presentacion, cantidad);
+  const subUnitario = newVal * factor;
+  const subTotal = presentacion === 'Granel' ? subUnitario : subUnitario * cantidad;
+  document.getElementById(`sub-${costoId}`).textContent = `${subTotal.toFixed(2)}`;
 
-  // Recalcular precio final del item
-  recalcItemUI(itemId, loteCosto, cantidad);
+  recalcItemUI(itemId, loteCosto, cantidad, presentacion);
   renderSummaryFromState();
 }
 
-function recalcItemUI(itemId, loteCosto, cantidad) {
-  // Suma todos los inputs de ese item
+function recalcItemUI(itemId, loteCosto, cantidad, presentacion) {
   const inputs = document.querySelectorAll(`[data-item-id="${itemId}"]`);
-  let totalCostos = 0;
-  inputs.forEach(i => totalCostos += parseFloat(i.value || 0));
+  let sumaCostosKg = 0;
+  inputs.forEach(i => sumaCostosKg += parseFloat(i.value || 0));
 
-  const precioFinal = loteCosto + totalCostos;
-  const totalUsd    = precioFinal * cantidad;
+  const precioFinalKg  = loteCosto + sumaCostosKg;
+  const factor         = factorPresentacion(presentacion, cantidad);
+  const precioUnitario = precioFinalKg * factor;
+  const totalUsd       = presentacion === 'Granel' ? precioUnitario : precioUnitario * cantidad;
 
   const pfEl  = document.getElementById(`pf-${itemId}`);
+  const puEl  = document.getElementById(`pu-${itemId}`);
   const totEl = document.getElementById(`tot-${itemId}`);
-  if (pfEl)  pfEl.textContent  = `$${precioFinal.toFixed(4)}`;
-  if (totEl) totEl.textContent = `$${totalUsd.toFixed(2)}`;
+  if (pfEl)  pfEl.textContent  = `${precioFinalKg.toFixed(4)}`;
+  if (puEl)  puEl.textContent  = `${precioUnitario.toFixed(4)}`;
+  if (totEl) totEl.textContent = `${totalUsd.toFixed(2)}`;
 }
 
 function renderSummary(items, costos) {
@@ -576,7 +591,21 @@ function resetEditor() {
   if (currentCotId) loadCotizacion(currentCotId);
 }
 
-// ── Init ──────────────────────────────────────────────────
+// Convierte costo/kg a costo por unidad de venta
+function factorPresentacion(presentacion, cantidad_unidades) {
+  switch ((presentacion || '').trim()) {
+    case '250g':   return 0.25;
+    case '500g':   return 0.5;
+    case '1Kg':    return 1;
+    case '12Kg':   return 12;
+    case 'Granel': return parseFloat(cantidad_unidades || 1);
+    default:       return 1;
+  }
+}
+
+function labelUnidad(presentacion) {
+  return presentacion === 'Granel' ? 'lote' : `bolsa ${presentacion}`;
+}
 document.getElementById('rfq-fecha').value = new Date().toISOString().slice(0, 10);
 addRfqItem(); // primer ítem por defecto
 </script>
