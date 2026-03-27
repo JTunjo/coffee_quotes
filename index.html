@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -228,19 +229,44 @@ function toast(msg, duration = 3000) {
   setTimeout(() => el.style.display = 'none', duration);
 }
 
-// ── API helpers ───────────────────────────────────────────
-async function apiGet(params) {
-  const qs = new URLSearchParams(params).toString();
-  const r = await fetch(`${API_URL}?${qs}`);
-  return r.json();
+// ── API helpers (JSONP — resuelve CORS con Google Apps Script) ────
+let _cbCounter = 0;
+
+function jsonp(params) {
+  return new Promise((resolve, reject) => {
+    const cbName = `_gcb${Date.now()}_${_cbCounter++}`;
+    params.callback = cbName;
+
+    const qs     = new URLSearchParams(params).toString();
+    const script = document.createElement('script');
+    script.src   = `${API_URL}?${qs}`;
+
+    const timer = setTimeout(() => {
+      cleanup();
+      reject(new Error('Timeout: el servidor no respondió'));
+    }, 15000);
+
+    function cleanup() {
+      delete window[cbName];
+      if (script.parentNode) script.parentNode.removeChild(script);
+      clearTimeout(timer);
+    }
+
+    window[cbName] = (data) => { cleanup(); resolve(data); };
+    script.onerror = () => { cleanup(); reject(new Error('Error de red al llamar al API')); };
+
+    document.head.appendChild(script);
+  });
 }
 
+// GET → JSONP directo
+async function apiGet(params) {
+  return jsonp(params);
+}
+
+// POST → GET con JSONP, body JSON en campo "data"
 async function apiPost(body) {
-  const r = await fetch(API_URL, {
-    method: 'POST',
-    body: JSON.stringify(body),
-  });
-  return r.json();
+  return jsonp({ _post: '1', data: encodeURIComponent(JSON.stringify(body)) });
 }
 
 // ══════════════════════════════════════════════════════════
