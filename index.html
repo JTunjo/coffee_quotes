@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Sistema de Cotización de Café</title>
+<style>
+  /* ── Reset & tokens ─────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg:      #f7f4ef;
+    --surface: #ffffff;
+    --border:  #d6cfc4;
+    --accent:  #5c3d1e;
+    --accent2: #8b6240;
+    --text:    #2c1d0e;
+    --muted:   #7a6652;
+    --green:   #2e7d32;
+    --red:     #c62828;
+    --radius:  8px;
+    --shadow:  0 2px 8px rgba(0,0,0,.08);
+  }
+  body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  /* ── Layout ─────────────────────────────────────── */
+  header { background: var(--accent); color: #fff; padding: 1rem 2rem; display: flex; align-items: center; gap: 1rem; }
+  header h1 { font-size: 1.2rem; font-weight: 700; }
+  nav { display: flex; gap: .5rem; margin-left: auto; }
+  nav button { background: rgba(255,255,255,.15); border: 1px solid rgba(255,255,255,.3); color: #fff; padding: .4rem .9rem; border-radius: var(--radius); cursor: pointer; font-size: .85rem; transition: background .2s; }
+  nav button:hover, nav button.active { background: rgba(255,255,255,.3); }
+
+  main { max-width: 1100px; margin: 2rem auto; padding: 0 1rem; }
+
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 1.5rem; margin-bottom: 1.5rem; }
+  .card-title { font-size: 1rem; font-weight: 700; color: var(--accent); margin-bottom: 1rem; border-bottom: 1px solid var(--border); padding-bottom: .5rem; }
+
+  /* ── Form elements ──────────────────────────────── */
+  .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: .75rem; }
+  label { font-size: .82rem; color: var(--muted); display: block; margin-bottom: .25rem; }
+  input, select, textarea { width: 100%; padding: .5rem .7rem; border: 1px solid var(--border); border-radius: var(--radius); font-size: .9rem; background: var(--bg); color: var(--text); }
+  input:focus, select:focus { outline: 2px solid var(--accent2); border-color: var(--accent2); }
+
+  /* ── Buttons ────────────────────────────────────── */
+  .btn { display: inline-flex; align-items: center; gap: .4rem; padding: .5rem 1.1rem; border: none; border-radius: var(--radius); cursor: pointer; font-size: .88rem; font-weight: 600; transition: filter .15s; }
+  .btn:hover { filter: brightness(.92); }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-secondary { background: var(--accent2); color: #fff; }
+  .btn-ghost { background: var(--bg); border: 1px solid var(--border); color: var(--text); }
+  .btn-danger { background: var(--red); color: #fff; }
+  .btn-sm { padding: .3rem .7rem; font-size: .78rem; }
+
+  /* ── Tables ─────────────────────────────────────── */
+  .tbl-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+  th { background: var(--accent); color: #fff; padding: .55rem .7rem; text-align: left; white-space: nowrap; }
+  td { padding: .5rem .7rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  tr:hover td { background: #faf7f3; }
+  td input[type="number"] { width: 90px; padding: .3rem .5rem; }
+
+  /* ── RFQ item rows ──────────────────────────────── */
+  .item-row { display: grid; grid-template-columns: 1fr 1fr 90px 1fr 1fr auto; gap: .5rem; align-items: center; padding: .6rem; border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: .5rem; background: var(--bg); }
+
+  /* ── Totals ─────────────────────────────────────── */
+  .totals-row td { font-weight: 700; background: #f0ebe3; }
+
+  /* ── Toast ──────────────────────────────────────── */
+  #toast { position: fixed; bottom: 1.5rem; right: 1.5rem; background: var(--accent); color: #fff; padding: .75rem 1.2rem; border-radius: var(--radius); box-shadow: var(--shadow); display: none; z-index: 999; font-size: .9rem; }
+
+  /* ── Tag ────────────────────────────────────────── */
+  .tag { display: inline-block; padding: .2rem .55rem; border-radius: 99px; font-size: .72rem; font-weight: 700; }
+  .tag-green { background: #e8f5e9; color: var(--green); }
+  .tag-yellow { background: #fff8e1; color: #e65100; }
+  .tag-blue { background: #e3f2fd; color: #1565c0; }
+
+  .hidden { display: none !important; }
+  .flex { display: flex; }
+  .gap-1 { gap: .5rem; }
+  .mt-1 { margin-top: .75rem; }
+  .mb-1 { margin-bottom: .75rem; }
+  .text-right { text-align: right; }
+  .text-muted { color: var(--muted); font-size: .8rem; }
+  .divider { border: none; border-top: 1px solid var(--border); margin: 1rem 0; }
+  .summary-box { background: #f0ebe3; border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem; margin-top: 1rem; }
+</style>
+</head>
+<body>
+
+<header>
+  <span style="font-size:1.6rem">☕</span>
+  <h1>CaféQuote</h1>
+  <nav>
+    <button class="active" onclick="showPage('rfq')">Nuevo RFQ</button>
+    <button onclick="showPage('list')">Mis RFQs</button>
+    <button onclick="showPage('cot')">Cotización</button>
+  </nav>
+</header>
+
+<main>
+
+  <!-- ══════════════════════════════════════
+       PAGE: NUEVO RFQ
+  ══════════════════════════════════════ -->
+  <div id="page-rfq">
+    <div class="card">
+      <div class="card-title">📋 Crear RFQ</div>
+      <div class="form-grid">
+        <div><label>Cliente</label><input id="rfq-cliente" placeholder="Ej. Nordic Roasters" /></div>
+        <div><label>Asesor</label><input id="rfq-asesor" placeholder="Tu nombre" /></div>
+        <div><label>Fecha</label><input id="rfq-fecha" type="date" /></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">📦 Ítems del RFQ</div>
+      <div id="rfq-items-container"></div>
+      <button class="btn btn-ghost mt-1" onclick="addRfqItem()">+ Agregar ítem</button>
+    </div>
+
+    <div class="flex gap-1" style="justify-content:flex-end">
+      <button class="btn btn-primary" onclick="submitRFQ()">💾 Crear RFQ y Cotización</button>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════
+       PAGE: LISTA DE RFQs
+  ══════════════════════════════════════ -->
+  <div id="page-list" class="hidden">
+    <div class="card">
+      <div class="card-title">📄 RFQs creados</div>
+      <button class="btn btn-ghost btn-sm mb-1" onclick="loadRFQList()">↺ Actualizar</button>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr>
+            <th>RFQ ID</th><th>Cliente</th><th>Asesor</th><th>Fecha</th><th>Estado</th><th>Acción</th>
+          </tr></thead>
+          <tbody id="rfq-list-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════
+       PAGE: COTIZACIÓN
+  ══════════════════════════════════════ -->
+  <div id="page-cot" class="hidden">
+
+    <!-- Buscar cotización -->
+    <div class="card">
+      <div class="card-title">🔍 Cargar Cotización</div>
+      <div class="flex gap-1">
+        <input id="cot-search-id" placeholder="ID de cotización" style="max-width:340px" />
+        <button class="btn btn-secondary" onclick="loadCotizacion()">Cargar</button>
+      </div>
+    </div>
+
+    <!-- Vista / editor -->
+    <div id="cot-editor" class="hidden">
+
+      <div class="card">
+        <div class="card-title">📊 Detalle de Cotización</div>
+        <div class="form-grid" id="cot-header-info"></div>
+      </div>
+
+      <div id="cot-items-section"></div>
+
+      <!-- Costo manual global -->
+      <div class="card">
+        <div class="card-title">➕ Agregar Costo Manual</div>
+        <div class="form-grid">
+          <div><label>Nombre del costo</label><input id="new-costo-nombre" placeholder="Ej. Seguro exportación" /></div>
+          <div><label>Item (cot_item_id)</label><input id="new-costo-item" placeholder="ID del item" /></div>
+          <div><label>Valor (USD/kg)</label><input id="new-costo-valor" type="number" step="0.01" placeholder="0.00" /></div>
+          <div><label>Tipo</label>
+            <select id="new-costo-tipo">
+              <option value="manual">Manual</option>
+              <option value="logistica">Logística</option>
+              <option value="financiero">Financiero</option>
+            </select>
+          </div>
+        </div>
+        <button class="btn btn-ghost mt-1 btn-sm" onclick="addManualCost()">+ Agregar a lista</button>
+      </div>
+
+      <div class="flex gap-1" style="justify-content:flex-end;margin-top:.5rem">
+        <button class="btn btn-ghost" onclick="resetEditor()">↺ Descartar</button>
+        <button class="btn btn-primary" onclick="saveCotizacion()">💾 Guardar Cotización</button>
+      </div>
+
+      <!-- Resumen -->
+      <div class="summary-box mt-1" id="cot-summary"></div>
+    </div>
+  </div>
+
+</main>
+
+<div id="toast"></div>
+
+<script>
+// ── Config ────────────────────────────────────────────────
+// 🔴 REEMPLAZA esta URL con la de tu Apps Script Web App:
+const API_URL = 'https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec';
+
+const USUARIO = 'asesor@cafe.com'; // mock; en producción usar auth
+
+// ── State ─────────────────────────────────────────────────
+let rfqItemCount  = 0;
+let currentCotId  = null;
+let cotState      = null; // datos cargados
+let pendingEdits  = {};   // { costo_id: { valor_usd_kg } }
+let pendingNew    = [];   // [ { nombre, tipo, valor_usd_kg, cot_item_id } ]
+
+// ── Navigation ────────────────────────────────────────────
+function showPage(p) {
+  ['rfq','list','cot'].forEach(id => {
+    document.getElementById('page-' + id).classList.toggle('hidden', id !== p);
+  });
+  document.querySelectorAll('nav button').forEach((b, i) =>
+    b.classList.toggle('active', ['rfq','list','cot'][i] === p)
+  );
+  if (p === 'list') loadRFQList();
+}
+
+// ── Toast ─────────────────────────────────────────────────
+function toast(msg, duration = 3000) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.style.display = 'block';
+  setTimeout(() => el.style.display = 'none', duration);
+}
+
+// ── API helpers ───────────────────────────────────────────
+async function apiGet(params) {
+  const qs = new URLSearchParams(params).toString();
+  const r = await fetch(`${API_URL}?${qs}`);
+  return r.json();
+}
+
+async function apiPost(body) {
+  const r = await fetch(API_URL, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+  return r.json();
+}
+
+// ══════════════════════════════════════════════════════════
+//  RFQ FORM
+// ══════════════════════════════════════════════════════════
+
+function addRfqItem() {
+  rfqItemCount++;
+  const id = `item-${rfqItemCount}`;
+  const div = document.createElement('div');
+  div.className = 'item-row';
+  div.id = id;
+  div.innerHTML = `
+    <div><label>Variedad</label><input placeholder="Ej. Geisha" data-field="variedad" /></div>
+    <div><label>Origen</label><input placeholder="Ej. Huila" data-field="origen" /></div>
+    <div><label>Cantidad kg</label><input type="number" min="1" value="100" data-field="cantidad_kg" /></div>
+    <div><label>Presentación</label>
+      <select data-field="presentacion">
+        <option>verde</option><option>tostado</option><option>molido</option>
+      </select>
+    </div>
+    <div><label>Tier</label>
+      <select data-field="tier">
+        <option value="estandar">Estándar</option>
+        <option value="lavado">Lavado</option>
+        <option value="fermentado">Fermentado</option>
+        <option value="especial">Especial</option>
+      </select>
+    </div>
+    <div><label>Lote ID</label><input placeholder="lote-xxx" data-field="lote_id" /></div>
+    <div><button class="btn btn-danger btn-sm" onclick="document.getElementById('${id}').remove()">✕</button></div>
+  `;
+  document.getElementById('rfq-items-container').appendChild(div);
+}
+
+function collectRfqItems() {
+  return [...document.querySelectorAll('#rfq-items-container .item-row')].map(row => {
+    const obj = {};
+    row.querySelectorAll('[data-field]').forEach(el => obj[el.dataset.field] = el.value);
+    return obj;
+  });
+}
+
+async function submitRFQ() {
+  const cliente = document.getElementById('rfq-cliente').value.trim();
+  const asesor  = document.getElementById('rfq-asesor').value.trim();
+  const fecha   = document.getElementById('rfq-fecha').value;
+  const items   = collectRfqItems();
+
+  if (!cliente || !asesor) return toast('⚠️ Completa cliente y asesor');
+  if (!items.length) return toast('⚠️ Agrega al menos un ítem');
+
+  toast('⏳ Creando RFQ...');
+  const res = await apiPost({ action: 'crearRFQ', cliente, asesor, fecha, items });
+  if (!res.ok) return toast('❌ Error: ' + res.error);
+
+  toast(`✅ RFQ creado. Cotización: ${res.cotizacion_id}`);
+  document.getElementById('cot-search-id').value = res.cotizacion_id;
+  showPage('cot');
+  loadCotizacion(res.cotizacion_id);
+}
+
+// ══════════════════════════════════════════════════════════
+//  RFQ LIST
+// ══════════════════════════════════════════════════════════
+
+async function loadRFQList() {
+  const tbody = document.getElementById('rfq-list-body');
+  tbody.innerHTML = '<tr><td colspan="6">Cargando...</td></tr>';
+  const res = await apiGet({ action: 'listRFQs' });
+  if (!res.ok || !res.rfqs.length) {
+    tbody.innerHTML = '<tr><td colspan="6" style="color:var(--muted)">Sin RFQs aún.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = res.rfqs.map(r => `
+    <tr>
+      <td><code style="font-size:.75rem">${r.rfq_id.slice(0,8)}…</code></td>
+      <td>${r.cliente}</td>
+      <td>${r.asesor}</td>
+      <td>${r.fecha}</td>
+      <td><span class="tag tag-yellow">${r.estado}</span></td>
+      <td><button class="btn btn-secondary btn-sm" onclick="openCotFromRFQ('${r.cotizacion_id}')">Ver cotización</button></td>
+    </tr>
+  `).join('');
+}
+
+function openCotFromRFQ(cotId) {
+  document.getElementById('cot-search-id').value = cotId;
+  showPage('cot');
+  loadCotizacion(cotId);
+}
+
+// ══════════════════════════════════════════════════════════
+//  COTIZACIÓN EDITOR
+// ══════════════════════════════════════════════════════════
+
+async function loadCotizacion(cotId) {
+  cotId = cotId || document.getElementById('cot-search-id').value.trim();
+  if (!cotId) return toast('⚠️ Ingresa un ID de cotización');
+
+  toast('⏳ Cargando...');
+  const res = await apiGet({ action: 'getCotizacion', cotizacionId: cotId });
+  if (!res.ok) return toast('❌ ' + res.error);
+
+  currentCotId = cotId;
+  cotState     = res;
+  pendingEdits = {};
+  pendingNew   = [];
+
+  renderCotizacion(res);
+  document.getElementById('cot-editor').classList.remove('hidden');
+  toast('✅ Cotización cargada');
+}
+
+function renderCotizacion({ cotizacion, items, costos }) {
+  // Header
+  document.getElementById('cot-header-info').innerHTML = `
+    <div><label>ID Cotización</label><strong style="font-size:.82rem">${cotizacion.cotizacion_id}</strong></div>
+    <div><label>Cliente</label><strong>${cotizacion.cliente}</strong></div>
+    <div><label>Asesor</label><strong>${cotizacion.asesor}</strong></div>
+    <div><label>Estado</label><span class="tag tag-yellow">${cotizacion.estado}</span></div>
+    <div><label>Actualizado</label><span class="text-muted">${cotizacion.updated_at || '—'}</span></div>
+  `;
+
+  // Items con sus costos
+  const section = document.getElementById('cot-items-section');
+  section.innerHTML = '';
+
+  items.forEach(item => {
+    const itemCostos = costos.filter(c => c.cot_item_id === item.cot_item_id);
+    const totalCostos = itemCostos.reduce((s, c) => s + parseFloat(c.valor_usd_kg || 0), 0);
+    const precioFinal = parseFloat(item.costo_lote_kg || 0) + totalCostos;
+    const totalUsd    = precioFinal * parseFloat(item.cantidad_kg || 0);
+
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `
+      <div class="card-title">
+        📦 ${item.variedad || '—'} · ${item.origen || '—'}
+        <span class="tag tag-blue" style="margin-left:.5rem">${item.presentacion}</span>
+        <span class="tag tag-green" style="margin-left:.25rem">${item.tier}</span>
+      </div>
+      <div class="form-grid" style="margin-bottom:.75rem">
+        <div><label>Lote ID</label><span>${item.lote_id || '—'}</span></div>
+        <div><label>Cantidad (kg)</label><span>${item.cantidad_kg}</span></div>
+        <div><label>Costo lote (USD/kg)</label><span>$${parseFloat(item.costo_lote_kg||0).toFixed(4)}</span></div>
+        <div><label>Precio final (USD/kg)</label><strong id="pf-${item.cot_item_id}">$${precioFinal.toFixed(4)}</strong></div>
+        <div><label>Total (USD)</label><strong id="tot-${item.cot_item_id}">$${totalUsd.toFixed(2)}</strong></div>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Costo</th><th>Tipo</th><th>USD/kg</th><th>Subtotal</th></tr></thead>
+          <tbody id="costos-body-${item.cot_item_id}">
+            ${itemCostos.map(c => renderCostoRow(c, item)).join('')}
+          </tbody>
+        </table>
+      </div>
+      <p class="text-muted mt-1">cot_item_id: <code>${item.cot_item_id}</code></p>
+    `;
+    section.appendChild(card);
+  });
+
+  renderSummary(items, costos);
+}
+
+function renderCostoRow(c, item) {
+  return `
+    <tr id="row-${c.costo_id}">
+      <td>${c.nombre}</td>
+      <td><span class="tag tag-blue">${c.tipo}</span></td>
+      <td>
+        <input type="number" step="0.0001"
+          value="${parseFloat(c.valor_usd_kg||0).toFixed(4)}"
+          data-costo-id="${c.costo_id}"
+          data-item-id="${item.cot_item_id}"
+          data-cantidad="${item.cantidad_kg}"
+          data-lote-costo="${item.costo_lote_kg}"
+          onchange="onCostoChange(this)"
+          style="width:100px"
+        />
+      </td>
+      <td id="sub-${c.costo_id}">$${(parseFloat(c.valor_usd_kg||0) * parseFloat(item.cantidad_kg||0)).toFixed(2)}</td>
+    </tr>
+  `;
+}
+
+function onCostoChange(input) {
+  const costoId   = input.dataset.costoId;
+  const itemId    = input.dataset.itemId;
+  const cantidad  = parseFloat(input.dataset.cantidad || 0);
+  const loteCosto = parseFloat(input.dataset.loteCosto || 0);
+  const newVal    = parseFloat(input.value || 0);
+
+  // Registrar edición pendiente
+  pendingEdits[costoId] = { costo_id: costoId, valor_usd_kg: newVal, cot_item_id: itemId };
+
+  // Actualizar subtotal inline
+  document.getElementById(`sub-${costoId}`).textContent = `$${(newVal * cantidad).toFixed(2)}`;
+
+  // Recalcular precio final del item
+  recalcItemUI(itemId, loteCosto, cantidad);
+  renderSummaryFromState();
+}
+
+function recalcItemUI(itemId, loteCosto, cantidad) {
+  // Suma todos los inputs de ese item
+  const inputs = document.querySelectorAll(`[data-item-id="${itemId}"]`);
+  let totalCostos = 0;
+  inputs.forEach(i => totalCostos += parseFloat(i.value || 0));
+
+  const precioFinal = loteCosto + totalCostos;
+  const totalUsd    = precioFinal * cantidad;
+
+  const pfEl  = document.getElementById(`pf-${itemId}`);
+  const totEl = document.getElementById(`tot-${itemId}`);
+  if (pfEl)  pfEl.textContent  = `$${precioFinal.toFixed(4)}`;
+  if (totEl) totEl.textContent = `$${totalUsd.toFixed(2)}`;
+}
+
+function renderSummary(items, costos) {
+  let grandTotal = 0;
+  items.forEach(item => {
+    const itemCostos = costos.filter(c => c.cot_item_id === item.cot_item_id)
+      .reduce((s, c) => s + parseFloat(c.valor_usd_kg || 0), 0);
+    const pf = parseFloat(item.costo_lote_kg || 0) + itemCostos;
+    grandTotal += pf * parseFloat(item.cantidad_kg || 0);
+  });
+
+  document.getElementById('cot-summary').innerHTML = `
+    <strong>Resumen de cotización</strong>
+    <div class="form-grid mt-1">
+      <div><label>Ítems</label><strong>${items.length}</strong></div>
+      <div><label>Total general (USD)</label><strong style="font-size:1.1rem;color:var(--green)">$${grandTotal.toFixed(2)}</strong></div>
+    </div>
+  `;
+}
+
+function renderSummaryFromState() {
+  if (!cotState) return;
+  // Recalcular con valores actuales del DOM
+  const items = cotState.items;
+  let grandTotal = 0;
+  items.forEach(item => {
+    const inputs = document.querySelectorAll(`[data-item-id="${item.cot_item_id}"]`);
+    let totalCostos = 0;
+    inputs.forEach(i => totalCostos += parseFloat(i.value || 0));
+    const pf = parseFloat(item.costo_lote_kg || 0) + totalCostos;
+    grandTotal += pf * parseFloat(item.cantidad_kg || 0);
+  });
+
+  const el = document.getElementById('cot-summary');
+  if (el) el.innerHTML = `
+    <strong>Resumen de cotización</strong>
+    <div class="form-grid mt-1">
+      <div><label>Ítems</label><strong>${items.length}</strong></div>
+      <div><label>Total general (USD)</label><strong style="font-size:1.1rem;color:var(--green)">$${grandTotal.toFixed(2)}</strong></div>
+    </div>
+  `;
+}
+
+function addManualCost() {
+  const nombre   = document.getElementById('new-costo-nombre').value.trim();
+  const itemId   = document.getElementById('new-costo-item').value.trim();
+  const valor    = parseFloat(document.getElementById('new-costo-valor').value || 0);
+  const tipo     = document.getElementById('new-costo-tipo').value;
+
+  if (!nombre || !itemId) return toast('⚠️ Nombre e ID de item son requeridos');
+
+  pendingNew.push({ nombre, tipo, valor_usd_kg: valor, cot_item_id: itemId });
+  toast(`✅ Costo "${nombre}" agregado (pendiente de guardar)`);
+
+  // Limpiar campos
+  document.getElementById('new-costo-nombre').value = '';
+  document.getElementById('new-costo-item').value   = '';
+  document.getElementById('new-costo-valor').value  = '';
+}
+
+async function saveCotizacion() {
+  if (!currentCotId) return toast('⚠️ No hay cotización cargada');
+
+  const costos        = Object.values(pendingEdits);
+  const costos_nuevos = pendingNew;
+
+  if (!costos.length && !costos_nuevos.length) return toast('ℹ️ Sin cambios que guardar');
+
+  toast('⏳ Guardando...');
+  const res = await apiPost({
+    action:        'guardarCotizacion',
+    cotizacion_id: currentCotId,
+    usuario:       USUARIO,
+    costos,
+    costos_nuevos,
+  });
+
+  if (!res.ok) return toast('❌ Error: ' + res.error);
+
+  toast('✅ Cotización guardada con historial de auditoría');
+  pendingEdits = {};
+  pendingNew   = [];
+  // Recargar para mostrar estado actualizado
+  await loadCotizacion(currentCotId);
+}
+
+function resetEditor() {
+  pendingEdits = {};
+  pendingNew   = [];
+  if (currentCotId) loadCotizacion(currentCotId);
+}
+
+// ── Init ──────────────────────────────────────────────────
+document.getElementById('rfq-fecha').value = new Date().toISOString().slice(0, 10);
+addRfqItem(); // primer ítem por defecto
+</script>
+</body>
+</html>
