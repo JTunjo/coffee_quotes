@@ -73,6 +73,7 @@
   .tag-blue { background: #e3f2fd; color: #1565c0; }
 
   .hidden { display: none !important; }
+  #modal-lote:not(.hidden) { display: flex !important; }
   .flex { display: flex; }
   .gap-1 { gap: .5rem; }
   .mt-1 { margin-top: .75rem; }
@@ -153,6 +154,11 @@
       </div>
     </div>
 
+    <!-- Banner de disponibilidad -->
+    <div id="disponibilidad-banner" class="hidden"
+      style="background:#fff3e0;border:1px solid #ff9800;border-radius:var(--radius);padding:1rem;margin-bottom:1rem;color:#e65100">
+    </div>
+
     <!-- Vista / editor -->
     <div id="cot-editor" class="hidden">
 
@@ -183,6 +189,8 @@
 
       <div class="flex gap-1" style="justify-content:flex-end;margin-top:.5rem">
         <button class="btn btn-ghost" onclick="resetEditor()">↺ Descartar</button>
+        <button id="btn-imprimir" class="btn btn-ghost" onclick="window.print()" disabled
+          style="opacity:.5" title="Resuelve los ítems sin disponibilidad para imprimir">🖨 Imprimir</button>
         <button class="btn btn-primary" onclick="saveCotizacion()">💾 Guardar Cotización</button>
       </div>
 
@@ -195,6 +203,17 @@
 
 <div id="toast"></div>
 
+<!-- Modal selección de lote -->
+<div id="modal-lote" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:1000;display:flex;align-items:center;justify-content:center">
+  <div style="background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow);padding:1.5rem;max-width:560px;width:90%;max-height:80vh;overflow-y:auto">
+    <h3 id="modal-lote-title" style="color:var(--accent);margin-bottom:1rem;font-size:1rem"></h3>
+    <p style="font-size:.82rem;color:var(--muted);margin-bottom:.75rem">
+      Se encontraron varios lotes disponibles en la ventana ±15 días. Selecciona uno:
+    </p>
+    <div id="modal-lote-body"></div>
+  </div>
+</div>
+
 <script>
 // ── Config ────────────────────────────────────────────────
 // 🔴 REEMPLAZA esta URL con la de tu Apps Script Web App:
@@ -205,9 +224,10 @@ const USUARIO = 'asesor@cafe.com'; // mock; en producción usar auth
 // ── State ─────────────────────────────────────────────────
 let rfqItemCount  = 0;
 let currentCotId  = null;
-let cotState      = null; // datos cargados
-let pendingEdits  = {};   // { costo_id: { valor_usd_kg } }
-let pendingNew    = [];   // [ { nombre, tipo, valor_usd_kg, cot_item_id } ]
+let cotState      = null;
+let pendingEdits  = {};
+let pendingNew    = [];
+let variedades    = []; // catálogo en memoria
 
 // ── Navigation ────────────────────────────────────────────
 function showPage(p) {
@@ -272,23 +292,37 @@ async function apiPost(body) {
 //  RFQ FORM
 // ══════════════════════════════════════════════════════════
 
+function variedadDatalist() {
+  return `<datalist id="variedades-list">
+    ${variedades.map(v => `<option value="${v}">`).join('')}
+  </datalist>`;
+}
+
 function addRfqItem() {
   rfqItemCount++;
   const id = `item-${rfqItemCount}`;
   const div = document.createElement('div');
   div.className = 'item-row';
   div.id = id;
+  // 7 columnas: variedad | origen | destino | fecha_req | cantidad | presentacion | tier | lote | ✕
+  div.style.gridTemplateColumns = '1fr 1fr 1fr 130px 90px 1fr 1fr 1fr auto';
   div.innerHTML = `
-    <div><label>Variedad</label><input placeholder="Ej. Geisha" data-field="variedad" /></div>
+    <div>
+      <label>Variedad</label>
+      <input list="variedades-list" placeholder="Ej. Geisha" data-field="variedad"
+        onblur="onVariedadBlur(this)" />
+    </div>
     <div><label>Origen</label><input placeholder="Ej. Huila" data-field="origen" /></div>
-    <div><label>Cantidad (unidades)</label><input type="number" min="1" value="100" data-field="cantidad_unidades" /></div>
+    <div><label>Destino</label><input placeholder="Ej. Oslo, Noruega" data-field="destino" /></div>
+    <div><label>Fecha requerida</label><input type="date" data-field="fecha_requerida" /></div>
+    <div><label>Cantidad</label><input type="number" min="1" value="100" data-field="cantidad_unidades" /></div>
     <div><label>Presentación</label>
       <select data-field="presentacion">
-        <option value="250g">250g — costo/kg ÷ 4</option>
-        <option value="500g">500g — costo/kg ÷ 2</option>
-        <option value="1Kg" selected>1 Kg — costo/kg</option>
-        <option value="12Kg">12 Kg — costo/kg × 12</option>
-        <option value="Granel">Granel — costo/kg × kg pedidos</option>
+        <option value="250g">250g</option>
+        <option value="500g">500g</option>
+        <option value="1Kg" selected>1 Kg</option>
+        <option value="12Kg">12 Kg</option>
+        <option value="Granel">Granel</option>
       </select>
     </div>
     <div><label>Tier</label>
@@ -299,10 +333,29 @@ function addRfqItem() {
         <option value="especial">Especial</option>
       </select>
     </div>
-    <div><label>Lote ID</label><input placeholder="lote-xxx" data-field="lote_id" /></div>
+    <div><label>Lote ID (opcional)</label><input placeholder="auto" data-field="lote_id" /></div>
     <div><button class="btn btn-danger btn-sm" onclick="document.getElementById('${id}').remove()">✕</button></div>
   `;
   document.getElementById('rfq-items-container').appendChild(div);
+  // Asegurarse de que el datalist existe
+  if (!document.getElementById('variedades-list')) {
+    document.body.insertAdjacentHTML('beforeend', variedadDatalist());
+  } else {
+    document.getElementById('variedades-list').innerHTML =
+      variedades.map(v => `<option value="${v}">`).join('');
+  }
+}
+
+// Si escribe una variedad nueva, la agrega al catálogo en memoria y en Sheets
+async function onVariedadBlur(input) {
+  const nombre = (input.value || '').trim();
+  if (!nombre || variedades.includes(nombre)) return;
+  variedades.push(nombre);
+  // Actualizar datalist
+  const dl = document.getElementById('variedades-list');
+  if (dl) dl.innerHTML = variedades.map(v => `<option value="${v}">`).join('');
+  // Persistir en Sheets (fire and forget)
+  apiPost({ action: 'agregarVariedad', nombre });
 }
 
 function collectRfqItems() {
@@ -311,6 +364,20 @@ function collectRfqItems() {
     row.querySelectorAll('[data-field]').forEach(el => obj[el.dataset.field] = el.value);
     return obj;
   });
+}
+
+function validateRfqItems(items) {
+  const errores = [];
+  items.forEach((item, i) => {
+    const n = i + 1;
+    if (!item.variedad)        errores.push(`Ítem ${n}: variedad requerida`);
+    if (!item.cantidad_unidades || item.cantidad_unidades <= 0)
+                               errores.push(`Ítem ${n}: cantidad requerida`);
+    if (!item.presentacion)    errores.push(`Ítem ${n}: presentación requerida`);
+    if (!item.fecha_requerida) errores.push(`Ítem ${n}: fecha requerida`);
+    if (!item.destino)         errores.push(`Ítem ${n}: destino requerido`);
+  });
+  return errores;
 }
 
 async function submitRFQ() {
@@ -322,11 +389,17 @@ async function submitRFQ() {
   if (!cliente || !asesor) return toast('⚠️ Completa cliente y asesor');
   if (!items.length) return toast('⚠️ Agrega al menos un ítem');
 
+  const errores = validateRfqItems(items);
+  if (errores.length) {
+    toast('⚠️ ' + errores[0] + (errores.length > 1 ? ` (+${errores.length - 1} más)` : ''));
+    return;
+  }
+
   toast('⏳ Creando RFQ...');
   const res = await apiPost({ action: 'crearRFQ', cliente, asesor, fecha, items });
   if (!res.ok) return toast('❌ Error: ' + res.error);
 
-  toast(`✅ RFQ creado. Cotización: ${res.cotizacion_id}`);
+  toast(`✅ RFQ creado. Abriendo cotización...`);
   document.getElementById('cot-search-id').value = res.cotizacion_id;
   showPage('cot');
   loadCotizacion(res.cotizacion_id);
@@ -381,7 +454,98 @@ async function loadCotizacion(cotId) {
 
   renderCotizacion(res);
   document.getElementById('cot-editor').classList.remove('hidden');
-  toast('✅ Cotización cargada');
+
+  // Verificar disponibilidad SIEMPRE al abrir
+  toast('⏳ Verificando disponibilidad...');
+  const verfRes = await apiGet({ action: 'verificarDisponibilidad', cotizacionId: cotId });
+  if (!verfRes.ok) { toast('❌ Error al verificar disponibilidad'); return; }
+
+  await handleVerificacion(verfRes, cotId);
+  toast('✅ Cotización lista');
+}
+
+async function handleVerificacion(verfRes, cotId) {
+  const { resultados, hay_incompletos } = verfRes;
+
+  // Actualizar banner
+  renderDisponibilidadBanner(resultados);
+
+  // Actualizar botón imprimir
+  document.getElementById('btn-imprimir').disabled = hay_incompletos;
+  document.getElementById('btn-imprimir').title = hay_incompletos
+    ? 'Resuelve los ítems sin disponibilidad para imprimir'
+    : 'Imprimir cotización';
+
+  // Para cada ítem que requiere selección, mostrar modal
+  const pendientes = resultados.filter(r => r.estado === 'seleccion_requerida');
+  for (const item of pendientes) {
+    await mostrarModalSeleccionLote(item, cotId);
+  }
+
+  // Recargar cotización con lotes ya asignados
+  if (pendientes.length) {
+    const res2 = await apiGet({ action: 'getCotizacion', cotizacionId: cotId });
+    if (res2.ok) { cotState = res2; renderCotizacion(res2); }
+  }
+}
+
+function renderDisponibilidadBanner(resultados) {
+  const banner = document.getElementById('disponibilidad-banner');
+  const sinDisp = resultados.filter(r => r.estado === 'sin_disponibilidad');
+  const sinFecha = resultados.filter(r => r.estado === 'sin_fecha_requerida');
+
+  if (!sinDisp.length && !sinFecha.length) {
+    banner.classList.add('hidden');
+    return;
+  }
+
+  let html = `<strong>⚠️ Atención — Esta cotización tiene ítems sin disponibilidad</strong><ul style="margin:.5rem 0 0 1rem">`;
+  sinDisp.forEach(r => {
+    html += `<li><strong>${r.variedad}</strong>: no hay lotes disponibles en la ventana ±15 días de la fecha requerida. Actualiza las disponibilidades en Sheets.</li>`;
+  });
+  sinFecha.forEach(r => {
+    html += `<li><strong>${r.variedad}</strong>: sin fecha requerida definida en el RFQ.</li>`;
+  });
+  html += `</ul><p style="margin-top:.5rem;font-size:.8rem">El botón <strong>Imprimir</strong> permanece desactivado hasta resolver todos los ítems.</p>`;
+
+  banner.innerHTML = html;
+  banner.classList.remove('hidden');
+}
+
+// Modal de selección de lote cuando hay múltiples opciones
+function mostrarModalSeleccionLote(item, cotId) {
+  return new Promise(resolve => {
+    const modal = document.getElementById('modal-lote');
+    const title = document.getElementById('modal-lote-title');
+    const body  = document.getElementById('modal-lote-body');
+
+    title.textContent = `Selecciona lote para: ${item.variedad}`;
+    body.innerHTML = item.lotes.map(l => `
+      <div class="lote-opcion" style="border:1px solid var(--border);border-radius:var(--radius);padding:.75rem;margin-bottom:.5rem;cursor:pointer;transition:background .15s"
+        onmouseover="this.style.background='#f0ebe3'" onmouseout="this.style.background=''"
+        onclick="seleccionarLote('${l.lote_id}','${item.cot_item_id}','${cotId}')">
+        <strong>${l.variedad}</strong> · ${l.origen} · ${l.proceso}
+        <div style="font-size:.8rem;color:var(--muted);margin-top:.25rem">
+          Disponible: ${l.fecha_disponible_desde} → ${l.fecha_disponible_hasta} &nbsp;|&nbsp;
+          Stock: ${l.kilos_disponibles} kg &nbsp;|&nbsp;
+          <strong>${parseFloat(l.costo_usd_kg).toFixed(2)}/kg</strong>
+        </div>
+      </div>
+    `).join('');
+
+    modal.classList.remove('hidden');
+    // Guardar resolver para que seleccionarLote lo llame
+    modal._resolve = resolve;
+  });
+}
+
+async function seleccionarLote(loteId, cotItemId, cotId) {
+  const modal = document.getElementById('modal-lote');
+  modal.classList.add('hidden');
+
+  await apiPost({ action: 'asignarLote', lote_id: loteId, cot_item_id: cotItemId, cotizacion_id: cotId });
+
+  if (modal._resolve) { modal._resolve(); modal._resolve = null; }
 }
 
 function renderCotizacion({ cotizacion, items, costos }) {
@@ -606,8 +770,7 @@ function factorPresentacion(presentacion, cantidad_unidades) {
 function labelUnidad(presentacion) {
   return presentacion === 'Granel' ? 'lote' : `bolsa ${presentacion}`;
 }
-document.getElementById('rfq-fecha').value = new Date().toISOString().slice(0, 10);
-addRfqItem(); // primer ítem por defecto
+init();
 </script>
 </body>
 </html>
