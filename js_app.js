@@ -20,40 +20,22 @@ var variedades   = [];
 
 // Construye las <option> del select de variedad
 function buildVariedadOptions() {
-  return variedades.map(function(v) {
-    return '<option value="' + v + '">' + v + '</option>';
-  }).join('') + '<option value="__nueva__">+ Nueva variedad…</option>';
+  if (!variedades.length) {
+    return '<option value="">— Sin variedades cargadas —</option>';
+  }
+  return '<option value="">Selecciona…</option>' +
+    variedades.map(function(v) {
+      return '<option value="' + v + '">' + v + '</option>';
+    }).join('');
 }
 
-// Refresca todos los selects de variedad que existen en el formulario
+// Refresca todos los selects de variedad activos en el formulario
 function refreshVariedadSelects() {
   document.querySelectorAll('select[data-field="variedad"]').forEach(function(sel) {
     var current = sel.value;
     sel.innerHTML = buildVariedadOptions();
-    // Restaurar selección si sigue siendo válida
-    if (current && current !== '__nueva__') sel.value = current;
+    if (current) sel.value = current;
   });
-}
-
-// Llamado cuando el usuario elige "+ Nueva variedad…"
-function onVariedadChange(sel) {
-  if (sel.value !== '__nueva__') return;
-
-  var nombre = (prompt('Nombre de la nueva variedad:') || '').trim();
-  if (!nombre) { sel.value = variedades[0] || ''; return; }
-
-  // Evitar duplicados (case-insensitive)
-  var existe = variedades.some(function(v) {
-    return v.toLowerCase() === nombre.toLowerCase();
-  });
-  if (existe) { sel.value = nombre; return; }
-
-  variedades.push(nombre);
-  refreshVariedadSelects();
-  sel.value = nombre;
-
-  // Persistir en Sheets (fire and forget)
-  apiPost({ action: 'agregarVariedad', nombre: nombre });
 }
 
 function addRfqItem() {
@@ -64,7 +46,7 @@ function addRfqItem() {
   div.id = id;
   div.innerHTML =
     '<div><label>Variedad</label>' +
-      '<select data-field="variedad" onchange="onVariedadChange(this)">' +
+      '<select data-field="variedad">' +
         buildVariedadOptions() +
       '</select></div>' +
     '<div><label>Origen</label>' +
@@ -323,9 +305,12 @@ async function init() {
   document.getElementById('rfq-fecha').value = new Date().toISOString().slice(0, 10);
   try {
     var res = await apiGet({ action: 'getVariedades' });
-    if (res.ok) variedades = res.variedades.map(function(v) { return v.nombre; });
+    if (res.ok && res.variedades.length) {
+      variedades = res.variedades.map(function(v) { return v.nombre; });
+    }
   } catch(e) { /* continúa sin catálogo */ }
-  addRfqItem(); // Agrega primer ítem ya con el listado cargado
+  // addRfqItem se llama DESPUÉS de cargar variedades
+  addRfqItem();
 }
 
 document.addEventListener('DOMContentLoaded', init);
