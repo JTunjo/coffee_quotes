@@ -17,11 +17,42 @@ var variedades   = [];
 //  RFQ
 // ══════════════════════════════════════════════════════════
 
-function onVariedadBlur(input) {
-  var nombre = (input.value || '').trim();
-  if (!nombre || variedades.indexOf(nombre) !== -1) return;
+
+// Construye las <option> del select de variedad
+function buildVariedadOptions() {
+  return variedades.map(function(v) {
+    return '<option value="' + v + '">' + v + '</option>';
+  }).join('') + '<option value="__nueva__">+ Nueva variedad…</option>';
+}
+
+// Refresca todos los selects de variedad que existen en el formulario
+function refreshVariedadSelects() {
+  document.querySelectorAll('select[data-field="variedad"]').forEach(function(sel) {
+    var current = sel.value;
+    sel.innerHTML = buildVariedadOptions();
+    // Restaurar selección si sigue siendo válida
+    if (current && current !== '__nueva__') sel.value = current;
+  });
+}
+
+// Llamado cuando el usuario elige "+ Nueva variedad…"
+function onVariedadChange(sel) {
+  if (sel.value !== '__nueva__') return;
+
+  var nombre = (prompt('Nombre de la nueva variedad:') || '').trim();
+  if (!nombre) { sel.value = variedades[0] || ''; return; }
+
+  // Evitar duplicados (case-insensitive)
+  var existe = variedades.some(function(v) {
+    return v.toLowerCase() === nombre.toLowerCase();
+  });
+  if (existe) { sel.value = nombre; return; }
+
   variedades.push(nombre);
-  updateDatalist();
+  refreshVariedadSelects();
+  sel.value = nombre;
+
+  // Persistir en Sheets (fire and forget)
   apiPost({ action: 'agregarVariedad', nombre: nombre });
 }
 
@@ -33,8 +64,9 @@ function addRfqItem() {
   div.id = id;
   div.innerHTML =
     '<div><label>Variedad</label>' +
-      '<input list="variedades-list" placeholder="Ej. Geisha" data-field="variedad" ' +
-      'onblur="onVariedadBlur(this)" /></div>' +
+      '<select data-field="variedad" onchange="onVariedadChange(this)">' +
+        buildVariedadOptions() +
+      '</select></div>' +
     '<div><label>Origen</label>' +
       '<input placeholder="Ej. Huila" data-field="origen" /></div>' +
     '<div><label>Destino</label>' +
@@ -125,13 +157,19 @@ async function submitRFQ() {
 
   toast('⏳ Creando RFQ...');
   try {
-    var res   = await apiPost({ action: 'crearRFQ', cliente: cliente,
-                                asesor: asesor, fecha: fecha, items: items });
-    var cotId = res.cotizacion_id;
+    var res = await apiPost({ action: 'crearRFQ', cliente: cliente,
+                              asesor: asesor, fecha: fecha, items: items });
+
+    // Siempre limpiar el formulario, independiente del resultado
     resetRfqForm();
 
-    if (!res.ok) { showPopupError(res.error || 'Error desconocido.'); return; }
+    if (!res || !res.ok) {
+      showPopupError(res && res.error ? res.error : 'Error desconocido del servidor.');
+      return;
+    }
 
+    // Éxito: guardar cotId antes de cualquier otra operación
+    var cotId = res.cotizacion_id;
     showPopupSuccess();
     setTimeout(function() {
       document.getElementById('cot-search-id').value = cotId;
@@ -141,7 +179,7 @@ async function submitRFQ() {
 
   } catch(err) {
     resetRfqForm();
-    showPopupError('No se pudo conectar con el servidor. Verifica tu conexión e inténtalo de nuevo.');
+    showPopupError('No se pudo conectar con el servidor.<br>Verifica tu conexión e inténtalo de nuevo.');
   }
 }
 
@@ -288,7 +326,7 @@ async function init() {
     var res = await apiGet({ action: 'getVariedades' });
     if (res.ok) variedades = res.variedades.map(function(v) { return v.nombre; });
   } catch(e) { /* continúa sin catálogo */ }
-  addRfqItem();
+  addRfqItem(); // Agrega primer ítem ya con el listado cargado
 }
 
 document.addEventListener('DOMContentLoaded', init);
