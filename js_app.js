@@ -97,7 +97,6 @@ function addRfqItem() {
       'onclick="document.getElementById(\'' + id + '\').remove()">✕</button></div>';
 
   document.getElementById('rfq-items-container').appendChild(div);
-  updateDatalist();
 }
 
 function collectRfqItems() {
