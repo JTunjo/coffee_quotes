@@ -860,7 +860,9 @@ function factorPresentacion(presentacion, cantidad_unidades) {
 function labelUnidad(presentacion) {
   return presentacion === 'Granel' ? 'lote' : `bolsa ${presentacion}`;
 }
-init();
+document.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>
+
+
