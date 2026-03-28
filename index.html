@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Sistema de Cotización de Café</title>
 <style>
-  /* ── Reset & tokens ─────────────────────────────── */
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
     --bg:      #f7f4ef;
@@ -22,7 +21,6 @@
   }
   body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
 
-  /* ── Layout ─────────────────────────────────────── */
   header { background: var(--accent); color: #fff; padding: 1rem 2rem; display: flex; align-items: center; gap: 1rem; }
   header h1 { font-size: 1.2rem; font-weight: 700; }
   nav { display: flex; gap: .5rem; margin-left: auto; }
@@ -34,22 +32,20 @@
   .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 1.5rem; margin-bottom: 1.5rem; }
   .card-title { font-size: 1rem; font-weight: 700; color: var(--accent); margin-bottom: 1rem; border-bottom: 1px solid var(--border); padding-bottom: .5rem; }
 
-  /* ── Form elements ──────────────────────────────── */
   .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: .75rem; }
   label { font-size: .82rem; color: var(--muted); display: block; margin-bottom: .25rem; }
   input, select, textarea { width: 100%; padding: .5rem .7rem; border: 1px solid var(--border); border-radius: var(--radius); font-size: .9rem; background: var(--bg); color: var(--text); }
   input:focus, select:focus { outline: 2px solid var(--accent2); border-color: var(--accent2); }
 
-  /* ── Buttons ────────────────────────────────────── */
   .btn { display: inline-flex; align-items: center; gap: .4rem; padding: .5rem 1.1rem; border: none; border-radius: var(--radius); cursor: pointer; font-size: .88rem; font-weight: 600; transition: filter .15s; }
   .btn:hover { filter: brightness(.92); }
-  .btn-primary { background: var(--accent); color: #fff; }
+  .btn:disabled { opacity: .45; cursor: not-allowed; filter: none; }
+  .btn-primary   { background: var(--accent);  color: #fff; }
   .btn-secondary { background: var(--accent2); color: #fff; }
-  .btn-ghost { background: var(--bg); border: 1px solid var(--border); color: var(--text); }
+  .btn-ghost  { background: var(--bg); border: 1px solid var(--border); color: var(--text); }
   .btn-danger { background: var(--red); color: #fff; }
   .btn-sm { padding: .3rem .7rem; font-size: .78rem; }
 
-  /* ── Tables ─────────────────────────────────────── */
   .tbl-wrap { overflow-x: auto; }
   table { width: 100%; border-collapse: collapse; font-size: .85rem; }
   th { background: var(--accent); color: #fff; padding: .55rem .7rem; text-align: left; white-space: nowrap; }
@@ -57,57 +53,44 @@
   tr:hover td { background: #faf7f3; }
   td input[type="number"] { width: 90px; padding: .3rem .5rem; }
 
-  /* ── RFQ item rows ──────────────────────────────── */
-  .item-row { display: grid; grid-template-columns: 1fr 1fr 90px 1fr 1fr auto; gap: .5rem; align-items: center; padding: .6rem; border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: .5rem; background: var(--bg); }
+  .item-row { display: grid; grid-template-columns: 1fr 1fr 1fr 130px 90px 1fr 1fr 1fr auto; gap: .5rem; align-items: end; padding: .6rem; border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: .5rem; background: var(--bg); }
 
-  /* ── Totals ─────────────────────────────────────── */
-  .totals-row td { font-weight: 700; background: #f0ebe3; }
+  .tag { display: inline-block; padding: .2rem .55rem; border-radius: 99px; font-size: .72rem; font-weight: 700; }
+  .tag-green  { background: #e8f5e9; color: var(--green); }
+  .tag-yellow { background: #fff8e1; color: #e65100; }
+  .tag-blue   { background: #e3f2fd; color: #1565c0; }
 
-  /* ── Toast ──────────────────────────────────────── */
+  /* Toast */
   #toast { position: fixed; bottom: 1.5rem; right: 1.5rem; background: var(--accent); color: #fff; padding: .75rem 1.2rem; border-radius: var(--radius); box-shadow: var(--shadow); display: none; z-index: 999; font-size: .9rem; }
 
-  /* ── Popup de resultado ─────────────────────────────────── */
-  #result-popup {
-    position: fixed; inset: 0; background: rgba(0,0,0,.45);
-    z-index: 1100; display: flex; align-items: center; justify-content: center;
-  }
-  #result-popup:not(.hidden) { display: flex !important; }
-  .popup-box {
-    background: var(--surface); border-radius: var(--radius);
-    box-shadow: 0 8px 32px rgba(0,0,0,.18); padding: 2rem 2.5rem;
-    max-width: 480px; width: 90%; text-align: center; position: relative;
-    animation: popIn .25s ease;
-  }
-  @keyframes popIn {
-    from { transform: scale(.85); opacity: 0; }
-    to   { transform: scale(1);   opacity: 1; }
-  }
-  .popup-icon { font-size: 3rem; margin-bottom: .75rem; }
+  /* Popup resultado RFQ */
+  #result-popup { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 1100; align-items: center; justify-content: center; display: none; }
+  #result-popup.show { display: flex; }
+  .popup-box { background: var(--surface); border-radius: var(--radius); box-shadow: 0 8px 32px rgba(0,0,0,.18); padding: 2rem 2.5rem; max-width: 480px; width: 90%; text-align: center; position: relative; animation: popIn .25s ease; }
+  @keyframes popIn { from { transform: scale(.85); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  .popup-icon  { font-size: 3rem; margin-bottom: .75rem; }
   .popup-title { font-size: 1.1rem; font-weight: 700; margin-bottom: .5rem; }
-  .popup-msg { font-size: .88rem; color: var(--muted); line-height: 1.5; }
-  .popup-close {
-    position: absolute; top: .75rem; right: .75rem;
-    background: none; border: none; font-size: 1.2rem;
-    cursor: pointer; color: var(--muted); line-height: 1;
-  }
+  .popup-msg   { font-size: .88rem; color: var(--muted); line-height: 1.6; text-align: left; }
+  .popup-close { position: absolute; top: .75rem; right: .75rem; background: none; border: none; font-size: 1.2rem; cursor: pointer; color: var(--muted); }
   .popup-close:hover { color: var(--text); }
 
-  /* ── Tag ────────────────────────────────────────── */
-  .tag { display: inline-block; padding: .2rem .55rem; border-radius: 99px; font-size: .72rem; font-weight: 700; }
-  .tag-green { background: #e8f5e9; color: var(--green); }
-  .tag-yellow { background: #fff8e1; color: #e65100; }
-  .tag-blue { background: #e3f2fd; color: #1565c0; }
+  /* Modal lote */
+  #modal-lote { position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 1000; align-items: center; justify-content: center; display: none; }
+  #modal-lote.show { display: flex; }
+  .modal-box { background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow); padding: 1.5rem; max-width: 560px; width: 90%; max-height: 80vh; overflow-y: auto; }
 
-  .hidden { display: none !important; }
-  #modal-lote:not(.hidden) { display: flex !important; }
-  .flex { display: flex; }
-  .gap-1 { gap: .5rem; }
-  .mt-1 { margin-top: .75rem; }
-  .mb-1 { margin-bottom: .75rem; }
+  /* Disponibilidad banner */
+  #disponibilidad-banner { background: #fff3e0; border: 1px solid #ff9800; border-radius: var(--radius); padding: 1rem; margin-bottom: 1rem; color: #e65100; }
+
+  .summary-box { background: #f0ebe3; border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem; margin-top: 1rem; }
+
+  .hidden  { display: none !important; }
+  .flex    { display: flex; }
+  .gap-1   { gap: .5rem; }
+  .mt-1    { margin-top: .75rem; }
+  .mb-1    { margin-bottom: .75rem; }
   .text-right { text-align: right; }
   .text-muted { color: var(--muted); font-size: .8rem; }
-  .divider { border: none; border-top: 1px solid var(--border); margin: 1rem 0; }
-  .summary-box { background: #f0ebe3; border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem; margin-top: 1rem; }
 </style>
 </head>
 <body>
@@ -124,9 +107,7 @@
 
 <main>
 
-  <!-- ══════════════════════════════════════
-       PAGE: NUEVO RFQ
-  ══════════════════════════════════════ -->
+  <!-- PAGE: NUEVO RFQ -->
   <div id="page-rfq">
     <div class="card">
       <div class="card-title">📋 Crear RFQ</div>
@@ -148,30 +129,22 @@
     </div>
   </div>
 
-  <!-- ══════════════════════════════════════
-       PAGE: LISTA DE RFQs
-  ══════════════════════════════════════ -->
+  <!-- PAGE: LISTA DE RFQs -->
   <div id="page-list" class="hidden">
     <div class="card">
       <div class="card-title">📄 RFQs creados</div>
       <button class="btn btn-ghost btn-sm mb-1" onclick="loadRFQList()">↺ Actualizar</button>
       <div class="tbl-wrap">
         <table>
-          <thead><tr>
-            <th>RFQ ID</th><th>Cliente</th><th>Asesor</th><th>Fecha</th><th>Estado</th><th>Acción</th>
-          </tr></thead>
+          <thead><tr><th>RFQ ID</th><th>Cliente</th><th>Asesor</th><th>Fecha</th><th>Estado</th><th>Acción</th></tr></thead>
           <tbody id="rfq-list-body"></tbody>
         </table>
       </div>
     </div>
   </div>
 
-  <!-- ══════════════════════════════════════
-       PAGE: COTIZACIÓN
-  ══════════════════════════════════════ -->
+  <!-- PAGE: COTIZACIÓN -->
   <div id="page-cot" class="hidden">
-
-    <!-- Buscar cotización -->
     <div class="card">
       <div class="card-title">🔍 Cargar Cotización</div>
       <div class="flex gap-1">
@@ -180,13 +153,9 @@
       </div>
     </div>
 
-    <!-- Banner de disponibilidad -->
-    <div id="disponibilidad-banner" class="hidden"
-      style="background:#fff3e0;border:1px solid #ff9800;border-radius:var(--radius);padding:1rem;margin-bottom:1rem;color:#e65100">
-    </div>
-
-    <!-- Vista / editor -->
     <div id="cot-editor" class="hidden">
+      <!-- Banner disponibilidad -->
+      <div id="disponibilidad-banner" class="hidden"></div>
 
       <div class="card">
         <div class="card-title">📊 Detalle de Cotización</div>
@@ -195,7 +164,6 @@
 
       <div id="cot-items-section"></div>
 
-      <!-- Costo manual global -->
       <div class="card">
         <div class="card-title">➕ Agregar Costo Manual</div>
         <div class="form-grid">
@@ -216,32 +184,32 @@
       <div class="flex gap-1" style="justify-content:flex-end;margin-top:.5rem">
         <button class="btn btn-ghost" onclick="resetEditor()">↺ Descartar</button>
         <button id="btn-imprimir" class="btn btn-ghost" onclick="window.print()" disabled
-          style="opacity:.5" title="Resuelve los ítems sin disponibilidad para imprimir">🖨 Imprimir</button>
+          title="Resuelve los ítems sin disponibilidad para imprimir">🖨 Imprimir</button>
         <button class="btn btn-primary" onclick="saveCotizacion()">💾 Guardar Cotización</button>
       </div>
 
-      <!-- Resumen -->
       <div class="summary-box mt-1" id="cot-summary"></div>
     </div>
   </div>
 
 </main>
 
+<!-- Toast -->
 <div id="toast"></div>
 
 <!-- Popup resultado crear RFQ -->
-<div id="result-popup" class="hidden">
+<div id="result-popup">
   <div class="popup-box">
-    <button class="popup-close" onclick="closeResultPopup()">✕</button>
-    <div class="popup-icon" id="popup-icon"></div>
+    <button class="popup-close" id="popup-close-btn" onclick="closeResultPopup()">✕</button>
+    <div class="popup-icon"  id="popup-icon"></div>
     <div class="popup-title" id="popup-title"></div>
-    <div class="popup-msg" id="popup-msg"></div>
+    <div class="popup-msg"   id="popup-msg"></div>
   </div>
 </div>
 
 <!-- Modal selección de lote -->
-<div id="modal-lote" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:1000;display:flex;align-items:center;justify-content:center">
-  <div style="background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow);padding:1.5rem;max-width:560px;width:90%;max-height:80vh;overflow-y:auto">
+<div id="modal-lote">
+  <div class="modal-box">
     <h3 id="modal-lote-title" style="color:var(--accent);margin-bottom:1rem;font-size:1rem"></h3>
     <p style="font-size:.82rem;color:var(--muted);margin-bottom:.75rem">
       Se encontraron varios lotes disponibles en la ventana ±15 días. Selecciona uno:
@@ -252,63 +220,81 @@
 
 <script>
 // ── Config ────────────────────────────────────────────────
-// 🔴 REEMPLAZA esta URL con la de tu Apps Script Web App:
 const API_URL = 'https://script.google.com/macros/s/AKfycbyUHB3tPy8y0qZVrgKRxwSoHgsY5E8NUAZ3ieZPAIc6HgKUi7oYngGhHn4IBgnm3snEMg/exec';
-
-const USUARIO = 'asesor@cafe.com'; // mock; en producción usar auth
+const USUARIO  = 'asesor@cafe.com';
 
 // ── State ─────────────────────────────────────────────────
-let rfqItemCount  = 0;
-let currentCotId  = null;
-let cotState      = null;
-let pendingEdits  = {};
-let pendingNew    = [];
-let variedades    = []; // catálogo en memoria
+let rfqItemCount = 0;
+let currentCotId = null;
+let cotState     = null;
+let pendingEdits = {};
+let pendingNew   = [];
+let variedades   = [];
+let _cbCounter   = 0;
+let _popupTimer  = null;
 
-// ── Navigation ────────────────────────────────────────────
-function showPage(p) {
-  ['rfq','list','cot'].forEach(id => {
-    document.getElementById('page-' + id).classList.toggle('hidden', id !== p);
+// ── JSONP ─────────────────────────────────────────────────
+function jsonp(params) {
+  return new Promise((resolve, reject) => {
+    const cbName = '_gcb' + Date.now() + '_' + (_cbCounter++);
+    params.callback = cbName;
+    const qs     = new URLSearchParams(params).toString();
+    const script = document.createElement('script');
+    script.src   = API_URL + '?' + qs;
+    const timer  = setTimeout(() => { cleanup(); reject(new Error('Timeout')); }, 15000);
+    function cleanup() {
+      delete window[cbName];
+      if (script.parentNode) script.parentNode.removeChild(script);
+      clearTimeout(timer);
+    }
+    window[cbName] = function(data) { cleanup(); resolve(data); };
+    script.onerror = function() { cleanup(); reject(new Error('Error de red')); };
+    document.head.appendChild(script);
   });
-  document.querySelectorAll('nav button').forEach((b, i) =>
-    b.classList.toggle('active', ['rfq','list','cot'][i] === p)
-  );
-  if (p === 'list') loadRFQList();
 }
 
-// ── Popup de resultado ────────────────────────────────────
-let _popupSuccessTimer = null;
+function apiGet(params)  { return jsonp(params); }
+function apiPost(body)   { return jsonp({ _post: '1', data: encodeURIComponent(JSON.stringify(body)) }); }
 
+// ── Toast ─────────────────────────────────────────────────
+function toast(msg, duration) {
+  duration = duration || 3000;
+  var el = document.getElementById('toast');
+  el.textContent = msg;
+  el.style.display = 'block';
+  setTimeout(function() { el.style.display = 'none'; }, duration);
+}
+
+// ── Popup resultado RFQ ───────────────────────────────────
 function showPopupSuccess() {
   document.getElementById('popup-icon').textContent  = '✅';
   document.getElementById('popup-title').textContent = '¡Cotización creada exitosamente!';
-  document.getElementById('popup-msg').textContent   = '';
-  document.querySelector('#result-popup .popup-close').style.display = 'none';
-  document.getElementById('result-popup').classList.remove('hidden');
-  // Auto-cierre a 1 segundo
-  _popupSuccessTimer = setTimeout(() => closeResultPopup(), 1000);
+  document.getElementById('popup-msg').innerHTML     = '';
+  document.getElementById('popup-close-btn').style.display = 'none';
+  document.getElementById('result-popup').classList.add('show');
+  _popupTimer = setTimeout(closeResultPopup, 1000);
 }
 
 function showPopupError(errorMsg) {
   document.getElementById('popup-icon').textContent  = '❌';
   document.getElementById('popup-title').textContent = 'Error al crear el RFQ';
   document.getElementById('popup-msg').innerHTML =
-    `<p style="margin-bottom:.75rem">${errorMsg}</p>
-     <p>Por favor verifica la información e inténtalo de nuevo.<br>
-     Si el error persiste, puede que se hayan guardado datos parciales. Revisa y borra manualmente las filas creadas en:</p>
-     <ul style="text-align:left;margin:.5rem 0 0 1.2rem;line-height:1.8">
-       <li><strong>RFQ</strong></li>
-       <li><strong>RFQ_items</strong></li>
-       <li><strong>Cotizaciones</strong></li>
-       <li><strong>Cotizacion_items</strong></li>
-     </ul>`;
-  document.querySelector('#result-popup .popup-close').style.display = 'block';
-  document.getElementById('result-popup').classList.remove('hidden');
+    '<p style="margin-bottom:.75rem">' + errorMsg + '</p>' +
+    '<p>Si el error persiste puede que se hayan guardado datos parciales. ' +
+    'Revisa y borra manualmente las filas creadas en:</p>' +
+    '<ul style="margin:.5rem 0 0 1.2rem;line-height:1.8">' +
+    '<li><strong>RFQ</strong></li>' +
+    '<li><strong>RFQ_items</strong></li>' +
+    '<li><strong>Cotizaciones</strong></li>' +
+    '<li><strong>Cotizacion_items</strong></li>' +
+    '</ul>';
+  document.getElementById('popup-close-btn').style.display = 'block';
+  document.getElementById('result-popup').classList.add('show');
 }
 
 function closeResultPopup() {
-  if (_popupSuccessTimer) { clearTimeout(_popupSuccessTimer); _popupSuccessTimer = null; }
-  document.getElementById('result-popup').classList.add('hidden');
+  if (_popupTimer) { clearTimeout(_popupTimer); _popupTimer = null; }
+  document.getElementById('result-popup').classList.remove('show');
 }
 
 // ── Reset formulario RFQ ──────────────────────────────────
@@ -321,202 +307,144 @@ function resetRfqForm() {
   addRfqItem();
 }
 
-// ── API helpers (JSONP — resuelve CORS con Google Apps Script) ────
-let _cbCounter = 0;
-
-function jsonp(params) {
-  return new Promise((resolve, reject) => {
-    const cbName = `_gcb${Date.now()}_${_cbCounter++}`;
-    params.callback = cbName;
-
-    const qs     = new URLSearchParams(params).toString();
-    const script = document.createElement('script');
-    script.src   = `${API_URL}?${qs}`;
-
-    const timer = setTimeout(() => {
-      cleanup();
-      reject(new Error('Timeout: el servidor no respondió'));
-    }, 15000);
-
-    function cleanup() {
-      delete window[cbName];
-      if (script.parentNode) script.parentNode.removeChild(script);
-      clearTimeout(timer);
-    }
-
-    window[cbName] = (data) => { cleanup(); resolve(data); };
-    script.onerror = () => { cleanup(); reject(new Error('Error de red al llamar al API')); };
-
-    document.head.appendChild(script);
+// ── Navigation ────────────────────────────────────────────
+function showPage(p) {
+  ['rfq', 'list', 'cot'].forEach(function(id) {
+    document.getElementById('page-' + id).classList.toggle('hidden', id !== p);
   });
+  document.querySelectorAll('nav button').forEach(function(b, i) {
+    b.classList.toggle('active', ['rfq', 'list', 'cot'][i] === p);
+  });
+  if (p === 'list') loadRFQList();
 }
 
-// GET → JSONP directo
-async function apiGet(params) {
-  return jsonp(params);
-}
-
-// POST → GET con JSONP, body JSON en campo "data"
-async function apiPost(body) {
-  return jsonp({ _post: '1', data: encodeURIComponent(JSON.stringify(body)) });
-}
-
-// ══════════════════════════════════════════════════════════
-//  RFQ FORM
-// ══════════════════════════════════════════════════════════
-
-function variedadDatalist() {
-  return `<datalist id="variedades-list">
-    ${variedades.map(v => `<option value="${v}">`).join('')}
-  </datalist>`;
-}
-
-function addRfqItem() {
-  rfqItemCount++;
-  const id = `item-${rfqItemCount}`;
-  const div = document.createElement('div');
-  div.className = 'item-row';
-  div.id = id;
-  // 7 columnas: variedad | origen | destino | fecha_req | cantidad | presentacion | tier | lote | ✕
-  div.style.gridTemplateColumns = '1fr 1fr 1fr 130px 90px 1fr 1fr 1fr auto';
-  div.innerHTML = `
-    <div>
-      <label>Variedad</label>
-      <input list="variedades-list" placeholder="Ej. Geisha" data-field="variedad"
-        onblur="onVariedadBlur(this)" />
-    </div>
-    <div><label>Origen</label><input placeholder="Ej. Huila" data-field="origen" /></div>
-    <div><label>Destino</label><input placeholder="Ej. Oslo, Noruega" data-field="destino" /></div>
-    <div><label>Fecha requerida</label><input type="date" data-field="fecha_requerida" /></div>
-    <div><label>Cantidad</label><input type="number" min="1" value="100" data-field="cantidad_unidades" /></div>
-    <div><label>Presentación</label>
-      <select data-field="presentacion">
-        <option value="250g">250g</option>
-        <option value="500g">500g</option>
-        <option value="1Kg" selected>1 Kg</option>
-        <option value="12Kg">12 Kg</option>
-        <option value="Granel">Granel</option>
-      </select>
-    </div>
-    <div><label>Tier</label>
-      <select data-field="tier">
-        <option value="estandar">Estándar</option>
-        <option value="lavado">Lavado</option>
-        <option value="fermentado">Fermentado</option>
-        <option value="especial">Especial</option>
-      </select>
-    </div>
-    <div><label>Lote ID (opcional)</label><input placeholder="auto" data-field="lote_id" /></div>
-    <div><button class="btn btn-danger btn-sm" onclick="document.getElementById('${id}').remove()">✕</button></div>
-  `;
-  document.getElementById('rfq-items-container').appendChild(div);
-  // Asegurarse de que el datalist existe
-  if (!document.getElementById('variedades-list')) {
-    document.body.insertAdjacentHTML('beforeend', variedadDatalist());
-  } else {
-    document.getElementById('variedades-list').innerHTML =
-      variedades.map(v => `<option value="${v}">`).join('');
+// ── Variedades / datalist ─────────────────────────────────
+function updateDatalist() {
+  var dl = document.getElementById('variedades-list');
+  if (!dl) {
+    dl = document.createElement('datalist');
+    dl.id = 'variedades-list';
+    document.body.appendChild(dl);
   }
+  dl.innerHTML = variedades.map(function(v) { return '<option value="' + v + '">'; }).join('');
 }
 
-// Si escribe una variedad nueva, la agrega al catálogo en memoria y en Sheets
-async function onVariedadBlur(input) {
-  const nombre = (input.value || '').trim();
-  if (!nombre || variedades.includes(nombre)) return;
+function onVariedadBlur(input) {
+  var nombre = (input.value || '').trim();
+  if (!nombre || variedades.indexOf(nombre) !== -1) return;
   variedades.push(nombre);
-  // Actualizar datalist
-  const dl = document.getElementById('variedades-list');
-  if (dl) dl.innerHTML = variedades.map(v => `<option value="${v}">`).join('');
-  // Persistir en Sheets (fire and forget)
+  updateDatalist();
   apiPost({ action: 'agregarVariedad', nombre });
 }
 
+// ── RFQ items ─────────────────────────────────────────────
+function addRfqItem() {
+  rfqItemCount++;
+  var id  = 'item-' + rfqItemCount;
+  var div = document.createElement('div');
+  div.className = 'item-row';
+  div.id = id;
+  div.innerHTML =
+    '<div><label>Variedad</label>' +
+      '<input list="variedades-list" placeholder="Ej. Geisha" data-field="variedad" onblur="onVariedadBlur(this)" /></div>' +
+    '<div><label>Origen</label><input placeholder="Ej. Huila" data-field="origen" /></div>' +
+    '<div><label>Destino</label><input placeholder="Ej. Oslo, Noruega" data-field="destino" /></div>' +
+    '<div><label>Fecha requerida</label><input type="date" data-field="fecha_requerida" /></div>' +
+    '<div><label>Cantidad</label><input type="number" min="1" value="100" data-field="cantidad_unidades" /></div>' +
+    '<div><label>Presentación</label>' +
+      '<select data-field="presentacion">' +
+        '<option value="250g">250g</option>' +
+        '<option value="500g">500g</option>' +
+        '<option value="1Kg" selected>1 Kg</option>' +
+        '<option value="12Kg">12 Kg</option>' +
+        '<option value="Granel">Granel</option>' +
+      '</select></div>' +
+    '<div><label>Tier</label>' +
+      '<select data-field="tier">' +
+        '<option value="estandar">Estándar</option>' +
+        '<option value="lavado">Lavado</option>' +
+        '<option value="fermentado">Fermentado</option>' +
+        '<option value="especial">Especial</option>' +
+      '</select></div>' +
+    '<div><label>Lote ID (opcional)</label><input placeholder="auto" data-field="lote_id" /></div>' +
+    '<div style="padding-top:1.2rem"><button class="btn btn-danger btn-sm" onclick="document.getElementById(\'' + id + '\').remove()">✕</button></div>';
+  document.getElementById('rfq-items-container').appendChild(div);
+  updateDatalist();
+}
+
 function collectRfqItems() {
-  return [...document.querySelectorAll('#rfq-items-container .item-row')].map(row => {
-    const obj = {};
-    row.querySelectorAll('[data-field]').forEach(el => obj[el.dataset.field] = el.value);
+  return Array.from(document.querySelectorAll('#rfq-items-container .item-row')).map(function(row) {
+    var obj = {};
+    row.querySelectorAll('[data-field]').forEach(function(el) { obj[el.dataset.field] = el.value; });
     return obj;
   });
 }
 
 function validateRfqItems(items) {
-  const errores = [];
-  items.forEach((item, i) => {
-    const n = i + 1;
-    if (!item.variedad)        errores.push(`Ítem ${n}: variedad requerida`);
-    if (!item.cantidad_unidades || item.cantidad_unidades <= 0)
-                               errores.push(`Ítem ${n}: cantidad requerida`);
-    if (!item.presentacion)    errores.push(`Ítem ${n}: presentación requerida`);
-    if (!item.fecha_requerida) errores.push(`Ítem ${n}: fecha requerida`);
-    if (!item.destino)         errores.push(`Ítem ${n}: destino requerido`);
+  var errores = [];
+  items.forEach(function(item, i) {
+    var n = i + 1;
+    if (!item.variedad)                              errores.push('Ítem ' + n + ': variedad requerida');
+    if (!item.cantidad_unidades || item.cantidad_unidades <= 0) errores.push('Ítem ' + n + ': cantidad requerida');
+    if (!item.presentacion)                          errores.push('Ítem ' + n + ': presentación requerida');
+    if (!item.fecha_requerida)                       errores.push('Ítem ' + n + ': fecha requerida');
+    if (!item.destino)                               errores.push('Ítem ' + n + ': destino requerido');
   });
   return errores;
 }
 
 async function submitRFQ() {
-  const cliente = document.getElementById('rfq-cliente').value.trim();
-  const asesor  = document.getElementById('rfq-asesor').value.trim();
-  const fecha   = document.getElementById('rfq-fecha').value;
-  const items   = collectRfqItems();
+  var cliente = document.getElementById('rfq-cliente').value.trim();
+  var asesor  = document.getElementById('rfq-asesor').value.trim();
+  var fecha   = document.getElementById('rfq-fecha').value;
+  var items   = collectRfqItems();
 
   if (!cliente || !asesor) return toast('⚠️ Completa cliente y asesor');
   if (!items.length)        return toast('⚠️ Agrega al menos un ítem');
 
-  const errores = validateRfqItems(items);
+  var errores = validateRfqItems(items);
   if (errores.length) {
-    toast('⚠️ ' + errores[0] + (errores.length > 1 ? ` (+${errores.length - 1} más)` : ''));
+    toast('⚠️ ' + errores[0] + (errores.length > 1 ? ' (+' + (errores.length - 1) + ' más)' : ''));
     return;
   }
 
   toast('⏳ Creando RFQ...');
   try {
-    const res = await apiPost({ action: 'crearRFQ', cliente, asesor, fecha, items });
-
-    // Siempre limpiar el formulario (éxito o error)
+    var res = await apiPost({ action: 'crearRFQ', cliente: cliente, asesor: asesor, fecha: fecha, items: items });
+    var cotId = res.cotizacion_id;
     resetRfqForm();
-
-    if (!res.ok) {
-      showPopupError(res.error || 'Error desconocido del servidor.');
-      return;
-    }
-
-    // Éxito
+    if (!res.ok) { showPopupError(res.error || 'Error desconocido.'); return; }
     showPopupSuccess();
-    // Después del auto-cierre, navegar a la cotización
-    setTimeout(() => {
-      document.getElementById('cot-search-id').value = res.cotizacion_id;
+    setTimeout(function() {
+      document.getElementById('cot-search-id').value = cotId;
       showPage('cot');
-      loadCotizacion(res.cotizacion_id);
+      loadCotizacion(cotId);
     }, 1100);
-
-  } catch (err) {
+  } catch(err) {
     resetRfqForm();
     showPopupError('No se pudo conectar con el servidor. Verifica tu conexión e inténtalo de nuevo.');
   }
 }
 
-// ══════════════════════════════════════════════════════════
-//  RFQ LIST
-// ══════════════════════════════════════════════════════════
-
+// ── RFQ List ──────────────────────────────────────────────
 async function loadRFQList() {
-  const tbody = document.getElementById('rfq-list-body');
+  var tbody = document.getElementById('rfq-list-body');
   tbody.innerHTML = '<tr><td colspan="6">Cargando...</td></tr>';
-  const res = await apiGet({ action: 'listRFQs' });
+  var res = await apiGet({ action: 'listRFQs' });
   if (!res.ok || !res.rfqs.length) {
     tbody.innerHTML = '<tr><td colspan="6" style="color:var(--muted)">Sin RFQs aún.</td></tr>';
     return;
   }
-  tbody.innerHTML = res.rfqs.map(r => `
-    <tr>
-      <td><code style="font-size:.75rem">${r.rfq_id.slice(0,8)}…</code></td>
-      <td>${r.cliente}</td>
-      <td>${r.asesor}</td>
-      <td>${r.fecha}</td>
-      <td><span class="tag tag-yellow">${r.estado}</span></td>
-      <td><button class="btn btn-secondary btn-sm" onclick="openCotFromRFQ('${r.cotizacion_id}')">Ver cotización</button></td>
-    </tr>
-  `).join('');
+  tbody.innerHTML = res.rfqs.map(function(r) {
+    return '<tr>' +
+      '<td><code style="font-size:.75rem">' + r.rfq_id.slice(0,8) + '…</code></td>' +
+      '<td>' + r.cliente + '</td>' +
+      '<td>' + r.asesor  + '</td>' +
+      '<td>' + r.fecha   + '</td>' +
+      '<td><span class="tag tag-yellow">' + r.estado + '</span></td>' +
+      '<td><button class="btn btn-secondary btn-sm" onclick="openCotFromRFQ(\'' + r.cotizacion_id + '\')">Ver cotización</button></td>' +
+      '</tr>';
+  }).join('');
 }
 
 function openCotFromRFQ(cotId) {
@@ -525,16 +453,13 @@ function openCotFromRFQ(cotId) {
   loadCotizacion(cotId);
 }
 
-// ══════════════════════════════════════════════════════════
-//  COTIZACIÓN EDITOR
-// ══════════════════════════════════════════════════════════
-
+// ── Cotización ────────────────────────────────────────────
 async function loadCotizacion(cotId) {
   cotId = cotId || document.getElementById('cot-search-id').value.trim();
   if (!cotId) return toast('⚠️ Ingresa un ID de cotización');
 
   toast('⏳ Cargando...');
-  const res = await apiGet({ action: 'getCotizacion', cotizacionId: cotId });
+  var res = await apiGet({ action: 'getCotizacion', cotizacionId: cotId });
   if (!res.ok) return toast('❌ ' + res.error);
 
   currentCotId = cotId;
@@ -545,307 +470,80 @@ async function loadCotizacion(cotId) {
   renderCotizacion(res);
   document.getElementById('cot-editor').classList.remove('hidden');
 
-  // Verificar disponibilidad SIEMPRE al abrir
   toast('⏳ Verificando disponibilidad...');
-  const verfRes = await apiGet({ action: 'verificarDisponibilidad', cotizacionId: cotId });
-  if (!verfRes.ok) { toast('❌ Error al verificar disponibilidad'); return; }
+  var vRes = await apiGet({ action: 'verificarDisponibilidad', cotizacionId: cotId });
+  if (!vRes.ok) { toast('❌ Error al verificar disponibilidad'); return; }
 
-  await handleVerificacion(verfRes, cotId);
+  await handleVerificacion(vRes, cotId);
   toast('✅ Cotización lista');
 }
 
-async function handleVerificacion(verfRes, cotId) {
-  const { resultados, hay_incompletos } = verfRes;
-
-  // Actualizar banner
-  renderDisponibilidadBanner(resultados);
-
-  // Actualizar botón imprimir
-  document.getElementById('btn-imprimir').disabled = hay_incompletos;
-  document.getElementById('btn-imprimir').title = hay_incompletos
+async function handleVerificacion(vRes, cotId) {
+  renderDisponibilidadBanner(vRes.resultados);
+  var btnImpr = document.getElementById('btn-imprimir');
+  btnImpr.disabled = vRes.hay_incompletos;
+  btnImpr.title    = vRes.hay_incompletos
     ? 'Resuelve los ítems sin disponibilidad para imprimir'
     : 'Imprimir cotización';
 
-  // Para cada ítem que requiere selección, mostrar modal
-  const pendientes = resultados.filter(r => r.estado === 'seleccion_requerida');
-  for (const item of pendientes) {
-    await mostrarModalSeleccionLote(item, cotId);
+  var pendientes = vRes.resultados.filter(function(r) { return r.estado === 'seleccion_requerida'; });
+  for (var i = 0; i < pendientes.length; i++) {
+    await mostrarModalSeleccionLote(pendientes[i], cotId);
   }
 
-  // Recargar cotización con lotes ya asignados
   if (pendientes.length) {
-    const res2 = await apiGet({ action: 'getCotizacion', cotizacionId: cotId });
+    var res2 = await apiGet({ action: 'getCotizacion', cotizacionId: cotId });
     if (res2.ok) { cotState = res2; renderCotizacion(res2); }
   }
 }
 
 function renderDisponibilidadBanner(resultados) {
-  const banner = document.getElementById('disponibilidad-banner');
-  const sinDisp = resultados.filter(r => r.estado === 'sin_disponibilidad');
-  const sinFecha = resultados.filter(r => r.estado === 'sin_fecha_requerida');
+  var banner   = document.getElementById('disponibilidad-banner');
+  var sinDisp  = resultados.filter(function(r) { return r.estado === 'sin_disponibilidad'; });
+  var sinFecha = resultados.filter(function(r) { return r.estado === 'sin_fecha_requerida'; });
 
-  if (!sinDisp.length && !sinFecha.length) {
-    banner.classList.add('hidden');
-    return;
-  }
+  if (!sinDisp.length && !sinFecha.length) { banner.classList.add('hidden'); return; }
 
-  let html = `<strong>⚠️ Atención — Esta cotización tiene ítems sin disponibilidad</strong><ul style="margin:.5rem 0 0 1rem">`;
-  sinDisp.forEach(r => {
-    html += `<li><strong>${r.variedad}</strong>: no hay lotes disponibles en la ventana ±15 días de la fecha requerida. Actualiza las disponibilidades en Sheets.</li>`;
+  var html = '<strong>⚠️ Atención — Esta cotización tiene ítems sin disponibilidad</strong><ul style="margin:.5rem 0 0 1rem">';
+  sinDisp.forEach(function(r) {
+    html += '<li><strong>' + r.variedad + '</strong>: no hay lotes en la ventana ±15 días. Actualiza las disponibilidades en Sheets.</li>';
   });
-  sinFecha.forEach(r => {
-    html += `<li><strong>${r.variedad}</strong>: sin fecha requerida definida en el RFQ.</li>`;
+  sinFecha.forEach(function(r) {
+    html += '<li><strong>' + r.variedad + '</strong>: sin fecha requerida en el RFQ.</li>';
   });
-  html += `</ul><p style="margin-top:.5rem;font-size:.8rem">El botón <strong>Imprimir</strong> permanece desactivado hasta resolver todos los ítems.</p>`;
-
+  html += '</ul><p style="margin-top:.5rem;font-size:.8rem">El botón <strong>Imprimir</strong> permanece desactivado hasta resolver todos los ítems.</p>';
   banner.innerHTML = html;
   banner.classList.remove('hidden');
 }
 
-// Modal de selección de lote cuando hay múltiples opciones
 function mostrarModalSeleccionLote(item, cotId) {
-  return new Promise(resolve => {
-    const modal = document.getElementById('modal-lote');
-    const title = document.getElementById('modal-lote-title');
-    const body  = document.getElementById('modal-lote-body');
-
-    title.textContent = `Selecciona lote para: ${item.variedad}`;
-    body.innerHTML = item.lotes.map(l => `
-      <div class="lote-opcion" style="border:1px solid var(--border);border-radius:var(--radius);padding:.75rem;margin-bottom:.5rem;cursor:pointer;transition:background .15s"
-        onmouseover="this.style.background='#f0ebe3'" onmouseout="this.style.background=''"
-        onclick="seleccionarLote('${l.lote_id}','${item.cot_item_id}','${cotId}')">
-        <strong>${l.variedad}</strong> · ${l.origen} · ${l.proceso}
-        <div style="font-size:.8rem;color:var(--muted);margin-top:.25rem">
-          Disponible: ${l.fecha_disponible_desde} → ${l.fecha_disponible_hasta} &nbsp;|&nbsp;
-          Stock: ${l.kilos_disponibles} kg &nbsp;|&nbsp;
-          <strong>${parseFloat(l.costo_usd_kg).toFixed(2)}/kg</strong>
-        </div>
-      </div>
-    `).join('');
-
-    modal.classList.remove('hidden');
-    // Guardar resolver para que seleccionarLote lo llame
+  return new Promise(function(resolve) {
+    var modal = document.getElementById('modal-lote');
+    document.getElementById('modal-lote-title').textContent = 'Selecciona lote para: ' + item.variedad;
+    document.getElementById('modal-lote-body').innerHTML = item.lotes.map(function(l) {
+      return '<div style="border:1px solid var(--border);border-radius:var(--radius);padding:.75rem;margin-bottom:.5rem;cursor:pointer" ' +
+        'onmouseover="this.style.background=\'#f0ebe3\'" onmouseout="this.style.background=\'\'" ' +
+        'onclick="seleccionarLote(\'' + l.lote_id + '\',\'' + item.cot_item_id + '\',\'' + cotId + '\')">' +
+        '<strong>' + l.variedad + '</strong> · ' + l.origen + ' · ' + l.proceso +
+        '<div style="font-size:.8rem;color:var(--muted);margin-top:.25rem">' +
+          l.fecha_disponible_desde + ' → ' + l.fecha_disponible_hasta +
+          ' &nbsp;|&nbsp; Stock: ' + l.kilos_disponibles + ' kg' +
+          ' &nbsp;|&nbsp; <strong>$' + parseFloat(l.costo_usd_kg).toFixed(2) + '/kg</strong>' +
+        '</div></div>';
+    }).join('');
+    modal.classList.add('show');
     modal._resolve = resolve;
   });
 }
 
 async function seleccionarLote(loteId, cotItemId, cotId) {
-  const modal = document.getElementById('modal-lote');
-  modal.classList.add('hidden');
-
+  var modal = document.getElementById('modal-lote');
+  modal.classList.remove('show');
   await apiPost({ action: 'asignarLote', lote_id: loteId, cot_item_id: cotItemId, cotizacion_id: cotId });
-
   if (modal._resolve) { modal._resolve(); modal._resolve = null; }
 }
 
-function renderCotizacion({ cotizacion, items, costos }) {
-  // Header
-  document.getElementById('cot-header-info').innerHTML = `
-    <div><label>ID Cotización</label><strong style="font-size:.82rem">${cotizacion.cotizacion_id}</strong></div>
-    <div><label>Cliente</label><strong>${cotizacion.cliente}</strong></div>
-    <div><label>Asesor</label><strong>${cotizacion.asesor}</strong></div>
-    <div><label>Estado</label><span class="tag tag-yellow">${cotizacion.estado}</span></div>
-    <div><label>Actualizado</label><span class="text-muted">${cotizacion.updated_at || '—'}</span></div>
-  `;
-
-  // Items con sus costos
-  const section = document.getElementById('cot-items-section');
-  section.innerHTML = '';
-
-  items.forEach(item => {
-    const itemCostos     = costos.filter(c => c.cot_item_id === item.cot_item_id);
-    const sumaCostosKg   = itemCostos.reduce((s, c) => s + parseFloat(c.valor_usd_kg || 0), 0);
-    const precioFinalKg  = parseFloat(item.costo_lote_kg || 0) + sumaCostosKg;
-    const factor         = factorPresentacion(item.presentacion, item.cantidad_unidades);
-    const precioUnitario = precioFinalKg * factor;
-    const cantidad       = parseFloat(item.cantidad_unidades || 0);
-    const totalUsd       = item.presentacion === 'Granel' ? precioUnitario : precioUnitario * cantidad;
-
-    const card = document.createElement('div');
-    card.className = 'card';
-    card.innerHTML = `
-      <div class="card-title">
-        📦 ${item.variedad || '—'} · ${item.origen || '—'}
-        <span class="tag tag-blue" style="margin-left:.5rem">${item.presentacion}</span>
-        <span class="tag tag-green" style="margin-left:.25rem">${item.tier}</span>
-      </div>
-      <div class="form-grid" style="margin-bottom:.75rem">
-        <div><label>Lote ID</label><span>${item.lote_id || '—'}</span></div>
-        <div><label>Presentación</label><span>${item.presentacion}</span></div>
-        <div><label>Cantidad</label><span>${item.cantidad_unidades} ${labelUnidad(item.presentacion)}</span></div>
-        <div><label>Costo lote (USD/kg)</label><span>${parseFloat(item.costo_lote_kg||0).toFixed(4)}</span></div>
-        <div><label>Precio/kg final</label><strong id="pf-${item.cot_item_id}">${precioFinalKg.toFixed(4)}</strong></div>
-        <div><label>Precio/${labelUnidad(item.presentacion)}</label><strong id="pu-${item.cot_item_id}">${precioUnitario.toFixed(4)}</strong></div>
-        <div><label>Total (USD)</label><strong id="tot-${item.cot_item_id}">${totalUsd.toFixed(2)}</strong></div>
-      </div>
-      <div class="tbl-wrap">
-        <table>
-          <thead><tr><th>Costo</th><th>Tipo</th><th>USD/kg</th><th>Factor</th><th>Subtotal</th></tr></thead>
-          <tbody id="costos-body-${item.cot_item_id}">
-            ${itemCostos.map(c => renderCostoRow(c, item)).join('')}
-          </tbody>
-        </table>
-      </div>
-      <p class="text-muted mt-1">cot_item_id: <code>${item.cot_item_id}</code></p>
-    `;
-    section.appendChild(card);
-  });
-
-  renderSummary(items, costos);
-}
-
-function renderCostoRow(c, item) {
-  return `
-    <tr id="row-${c.costo_id}">
-      <td>${c.nombre}</td>
-      <td><span class="tag tag-blue">${c.tipo}</span></td>
-      <td>
-        <input type="number" step="0.0001"
-          value="${parseFloat(c.valor_usd_kg||0).toFixed(4)}"
-          data-costo-id="${c.costo_id}"
-          data-item-id="${item.cot_item_id}"
-          data-cantidad="${item.cantidad_unidades}"
-          data-presentacion="${item.presentacion}"
-          data-lote-costo="${item.costo_lote_kg}"
-          onchange="onCostoChange(this)"
-          style="width:100px"
-        />
-      </td>
-      <td class="text-muted" style="font-size:.75rem">× ${factorPresentacion(item.presentacion, item.cantidad_unidades).toFixed(4)} kg</td>
-      <td id="sub-${c.costo_id}">${(parseFloat(c.valor_usd_kg||0) * factorPresentacion(item.presentacion, item.cantidad_unidades) * (item.presentacion === 'Granel' ? 1 : parseFloat(item.cantidad_unidades||0))).toFixed(2)}</td>
-    </tr>
-  `;
-}
-
-function onCostoChange(input) {
-  const costoId   = input.dataset.costoId;
-  const itemId    = input.dataset.itemId;
-  const cantidad  = parseFloat(input.dataset.cantidad || 0);
-  const presentacion = input.dataset.presentacion;
-  const loteCosto = parseFloat(input.dataset.loteCosto || 0);
-  const newVal    = parseFloat(input.value || 0);
-
-  pendingEdits[costoId] = { costo_id: costoId, valor_usd_kg: newVal, cot_item_id: itemId };
-
-  // Subtotal de esta línea = valor/kg × factor
-  const factor = factorPresentacion(presentacion, cantidad);
-  const subUnitario = newVal * factor;
-  const subTotal = presentacion === 'Granel' ? subUnitario : subUnitario * cantidad;
-  document.getElementById(`sub-${costoId}`).textContent = `${subTotal.toFixed(2)}`;
-
-  recalcItemUI(itemId, loteCosto, cantidad, presentacion);
-  renderSummaryFromState();
-}
-
-function recalcItemUI(itemId, loteCosto, cantidad, presentacion) {
-  const inputs = document.querySelectorAll(`[data-item-id="${itemId}"]`);
-  let sumaCostosKg = 0;
-  inputs.forEach(i => sumaCostosKg += parseFloat(i.value || 0));
-
-  const precioFinalKg  = loteCosto + sumaCostosKg;
-  const factor         = factorPresentacion(presentacion, cantidad);
-  const precioUnitario = precioFinalKg * factor;
-  const totalUsd       = presentacion === 'Granel' ? precioUnitario : precioUnitario * cantidad;
-
-  const pfEl  = document.getElementById(`pf-${itemId}`);
-  const puEl  = document.getElementById(`pu-${itemId}`);
-  const totEl = document.getElementById(`tot-${itemId}`);
-  if (pfEl)  pfEl.textContent  = `${precioFinalKg.toFixed(4)}`;
-  if (puEl)  puEl.textContent  = `${precioUnitario.toFixed(4)}`;
-  if (totEl) totEl.textContent = `${totalUsd.toFixed(2)}`;
-}
-
-function renderSummary(items, costos) {
-  let grandTotal = 0;
-  items.forEach(item => {
-    const itemCostos = costos.filter(c => c.cot_item_id === item.cot_item_id)
-      .reduce((s, c) => s + parseFloat(c.valor_usd_kg || 0), 0);
-    const pf = parseFloat(item.costo_lote_kg || 0) + itemCostos;
-    grandTotal += pf * parseFloat(item.cantidad_kg || 0);
-  });
-
-  document.getElementById('cot-summary').innerHTML = `
-    <strong>Resumen de cotización</strong>
-    <div class="form-grid mt-1">
-      <div><label>Ítems</label><strong>${items.length}</strong></div>
-      <div><label>Total general (USD)</label><strong style="font-size:1.1rem;color:var(--green)">$${grandTotal.toFixed(2)}</strong></div>
-    </div>
-  `;
-}
-
-function renderSummaryFromState() {
-  if (!cotState) return;
-  // Recalcular con valores actuales del DOM
-  const items = cotState.items;
-  let grandTotal = 0;
-  items.forEach(item => {
-    const inputs = document.querySelectorAll(`[data-item-id="${item.cot_item_id}"]`);
-    let totalCostos = 0;
-    inputs.forEach(i => totalCostos += parseFloat(i.value || 0));
-    const pf = parseFloat(item.costo_lote_kg || 0) + totalCostos;
-    grandTotal += pf * parseFloat(item.cantidad_kg || 0);
-  });
-
-  const el = document.getElementById('cot-summary');
-  if (el) el.innerHTML = `
-    <strong>Resumen de cotización</strong>
-    <div class="form-grid mt-1">
-      <div><label>Ítems</label><strong>${items.length}</strong></div>
-      <div><label>Total general (USD)</label><strong style="font-size:1.1rem;color:var(--green)">$${grandTotal.toFixed(2)}</strong></div>
-    </div>
-  `;
-}
-
-function addManualCost() {
-  const nombre   = document.getElementById('new-costo-nombre').value.trim();
-  const itemId   = document.getElementById('new-costo-item').value.trim();
-  const valor    = parseFloat(document.getElementById('new-costo-valor').value || 0);
-  const tipo     = document.getElementById('new-costo-tipo').value;
-
-  if (!nombre || !itemId) return toast('⚠️ Nombre e ID de item son requeridos');
-
-  pendingNew.push({ nombre, tipo, valor_usd_kg: valor, cot_item_id: itemId });
-  toast(`✅ Costo "${nombre}" agregado (pendiente de guardar)`);
-
-  // Limpiar campos
-  document.getElementById('new-costo-nombre').value = '';
-  document.getElementById('new-costo-item').value   = '';
-  document.getElementById('new-costo-valor').value  = '';
-}
-
-async function saveCotizacion() {
-  if (!currentCotId) return toast('⚠️ No hay cotización cargada');
-
-  const costos        = Object.values(pendingEdits);
-  const costos_nuevos = pendingNew;
-
-  if (!costos.length && !costos_nuevos.length) return toast('ℹ️ Sin cambios que guardar');
-
-  toast('⏳ Guardando...');
-  const res = await apiPost({
-    action:        'guardarCotizacion',
-    cotizacion_id: currentCotId,
-    usuario:       USUARIO,
-    costos,
-    costos_nuevos,
-  });
-
-  if (!res.ok) return toast('❌ Error: ' + res.error);
-
-  toast('✅ Cotización guardada con historial de auditoría');
-  pendingEdits = {};
-  pendingNew   = [];
-  // Recargar para mostrar estado actualizado
-  await loadCotizacion(currentCotId);
-}
-
-function resetEditor() {
-  pendingEdits = {};
-  pendingNew   = [];
-  if (currentCotId) loadCotizacion(currentCotId);
-}
-
-// Convierte costo/kg a costo por unidad de venta
+// ── Render cotización ─────────────────────────────────────
 function factorPresentacion(presentacion, cantidad_unidades) {
   switch ((presentacion || '').trim()) {
     case '250g':   return 0.25;
@@ -858,11 +556,213 @@ function factorPresentacion(presentacion, cantidad_unidades) {
 }
 
 function labelUnidad(presentacion) {
-  return presentacion === 'Granel' ? 'lote' : `bolsa ${presentacion}`;
+  return presentacion === 'Granel' ? 'lote' : 'bolsa ' + presentacion;
 }
+
+function renderCotizacion(data) {
+  var cotizacion = data.cotizacion;
+  var items      = data.items;
+  var costos     = data.costos;
+
+  document.getElementById('cot-header-info').innerHTML =
+    '<div><label>ID Cotización</label><strong style="font-size:.82rem">' + cotizacion.cotizacion_id + '</strong></div>' +
+    '<div><label>Cliente</label><strong>' + cotizacion.cliente + '</strong></div>' +
+    '<div><label>Asesor</label><strong>'  + cotizacion.asesor  + '</strong></div>' +
+    '<div><label>Estado</label><span class="tag tag-yellow">' + cotizacion.estado + '</span></div>' +
+    '<div><label>Actualizado</label><span class="text-muted">' + (cotizacion.updated_at || '—') + '</span></div>';
+
+  var section = document.getElementById('cot-items-section');
+  section.innerHTML = '';
+
+  items.forEach(function(item) {
+    var itemCostos   = costos.filter(function(c) { return c.cot_item_id === item.cot_item_id; });
+    var sumaCostosKg = itemCostos.reduce(function(s, c) { return s + parseFloat(c.valor_usd_kg || 0); }, 0);
+    var precioFinalKg  = parseFloat(item.costo_lote_kg || 0) + sumaCostosKg;
+    var factor         = factorPresentacion(item.presentacion, item.cantidad_unidades);
+    var precioUnitario = precioFinalKg * factor;
+    var cantidad       = parseFloat(item.cantidad_unidades || 0);
+    var totalUsd       = item.presentacion === 'Granel' ? precioUnitario : precioUnitario * cantidad;
+
+    var card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML =
+      '<div class="card-title">' +
+        '📦 ' + (item.variedad || '—') + ' · ' + (item.origen || '—') +
+        ' <span class="tag tag-blue" style="margin-left:.5rem">' + item.presentacion + '</span>' +
+        ' <span class="tag tag-green" style="margin-left:.25rem">' + item.tier + '</span>' +
+      '</div>' +
+      '<div class="form-grid" style="margin-bottom:.75rem">' +
+        '<div><label>Lote ID</label><span>' + (item.lote_id || '—') + '</span></div>' +
+        '<div><label>Presentación</label><span>' + item.presentacion + '</span></div>' +
+        '<div><label>Cantidad</label><span>' + item.cantidad_unidades + ' ' + labelUnidad(item.presentacion) + '</span></div>' +
+        '<div><label>Costo lote (USD/kg)</label><span>$' + parseFloat(item.costo_lote_kg || 0).toFixed(4) + '</span></div>' +
+        '<div><label>Precio/kg final</label><strong id="pf-' + item.cot_item_id + '">$' + precioFinalKg.toFixed(4) + '</strong></div>' +
+        '<div><label>Precio/' + labelUnidad(item.presentacion) + '</label><strong id="pu-' + item.cot_item_id + '">$' + precioUnitario.toFixed(4) + '</strong></div>' +
+        '<div><label>Total (USD)</label><strong id="tot-' + item.cot_item_id + '">$' + totalUsd.toFixed(2) + '</strong></div>' +
+      '</div>' +
+      '<div class="tbl-wrap">' +
+        '<table>' +
+          '<thead><tr><th>Costo</th><th>Tipo</th><th>USD/kg</th><th>Factor</th><th>Subtotal</th></tr></thead>' +
+          '<tbody>' + itemCostos.map(function(c) { return renderCostoRow(c, item); }).join('') + '</tbody>' +
+        '</table>' +
+      '</div>' +
+      '<p class="text-muted mt-1">cot_item_id: <code>' + item.cot_item_id + '</code></p>';
+    section.appendChild(card);
+  });
+
+  renderSummary(items, costos);
+}
+
+function renderCostoRow(c, item) {
+  var factor = factorPresentacion(item.presentacion, item.cantidad_unidades);
+  var val    = parseFloat(c.valor_usd_kg || 0);
+  var cant   = parseFloat(item.cantidad_unidades || 0);
+  var sub    = item.presentacion === 'Granel' ? val * factor : val * factor * cant;
+  return '<tr id="row-' + c.costo_id + '">' +
+    '<td>' + c.nombre + '</td>' +
+    '<td><span class="tag tag-blue">' + c.tipo + '</span></td>' +
+    '<td><input type="number" step="0.0001" value="' + val.toFixed(4) + '" ' +
+      'data-costo-id="' + c.costo_id + '" ' +
+      'data-item-id="' + item.cot_item_id + '" ' +
+      'data-cantidad="' + item.cantidad_unidades + '" ' +
+      'data-presentacion="' + item.presentacion + '" ' +
+      'data-lote-costo="' + item.costo_lote_kg + '" ' +
+      'onchange="onCostoChange(this)" style="width:100px" /></td>' +
+    '<td class="text-muted" style="font-size:.75rem">× ' + factor.toFixed(4) + ' kg</td>' +
+    '<td id="sub-' + c.costo_id + '">$' + sub.toFixed(2) + '</td>' +
+    '</tr>';
+}
+
+function onCostoChange(input) {
+  var costoId      = input.dataset.costoId;
+  var itemId       = input.dataset.itemId;
+  var cantidad     = parseFloat(input.dataset.cantidad || 0);
+  var presentacion = input.dataset.presentacion;
+  var loteCosto    = parseFloat(input.dataset.loteCosto || 0);
+  var newVal       = parseFloat(input.value || 0);
+
+  pendingEdits[costoId] = { costo_id: costoId, valor_usd_kg: newVal, cot_item_id: itemId };
+
+  var factor    = factorPresentacion(presentacion, cantidad);
+  var subUn     = newVal * factor;
+  var subTotal  = presentacion === 'Granel' ? subUn : subUn * cantidad;
+  document.getElementById('sub-' + costoId).textContent = '$' + subTotal.toFixed(2);
+
+  recalcItemUI(itemId, loteCosto, cantidad, presentacion);
+  renderSummaryFromState();
+}
+
+function recalcItemUI(itemId, loteCosto, cantidad, presentacion) {
+  var inputs = document.querySelectorAll('[data-item-id="' + itemId + '"]');
+  var sumaCostosKg = 0;
+  inputs.forEach(function(i) { sumaCostosKg += parseFloat(i.value || 0); });
+
+  var precioFinalKg  = loteCosto + sumaCostosKg;
+  var factor         = factorPresentacion(presentacion, cantidad);
+  var precioUnitario = precioFinalKg * factor;
+  var totalUsd       = presentacion === 'Granel' ? precioUnitario : precioUnitario * cantidad;
+
+  var pfEl  = document.getElementById('pf-'  + itemId);
+  var puEl  = document.getElementById('pu-'  + itemId);
+  var totEl = document.getElementById('tot-' + itemId);
+  if (pfEl)  pfEl.textContent  = '$' + precioFinalKg.toFixed(4);
+  if (puEl)  puEl.textContent  = '$' + precioUnitario.toFixed(4);
+  if (totEl) totEl.textContent = '$' + totalUsd.toFixed(2);
+}
+
+function renderSummary(items, costos) {
+  var grand = 0;
+  items.forEach(function(item) {
+    var sum = costos.filter(function(c) { return c.cot_item_id === item.cot_item_id; })
+      .reduce(function(s, c) { return s + parseFloat(c.valor_usd_kg || 0); }, 0);
+    var pf     = parseFloat(item.costo_lote_kg || 0) + sum;
+    var factor = factorPresentacion(item.presentacion, item.cantidad_unidades);
+    var pu     = pf * factor;
+    var cant   = parseFloat(item.cantidad_unidades || 0);
+    grand += item.presentacion === 'Granel' ? pu : pu * cant;
+  });
+  document.getElementById('cot-summary').innerHTML =
+    '<strong>Resumen de cotización</strong>' +
+    '<div class="form-grid mt-1">' +
+      '<div><label>Ítems</label><strong>' + items.length + '</strong></div>' +
+      '<div><label>Total general (USD)</label><strong style="font-size:1.1rem;color:var(--green)">$' + grand.toFixed(2) + '</strong></div>' +
+    '</div>';
+}
+
+function renderSummaryFromState() {
+  if (!cotState) return;
+  var costos = cotState.costos;
+  var grand  = 0;
+  cotState.items.forEach(function(item) {
+    var inputs = document.querySelectorAll('[data-item-id="' + item.cot_item_id + '"]');
+    var sumaCostosKg = 0;
+    inputs.forEach(function(i) { sumaCostosKg += parseFloat(i.value || 0); });
+    var pf     = parseFloat(item.costo_lote_kg || 0) + sumaCostosKg;
+    var factor = factorPresentacion(item.presentacion, item.cantidad_unidades);
+    var pu     = pf * factor;
+    var cant   = parseFloat(item.cantidad_unidades || 0);
+    grand += item.presentacion === 'Granel' ? pu : pu * cant;
+  });
+  var el = document.getElementById('cot-summary');
+  if (el) el.innerHTML =
+    '<strong>Resumen de cotización</strong>' +
+    '<div class="form-grid mt-1">' +
+      '<div><label>Ítems</label><strong>' + cotState.items.length + '</strong></div>' +
+      '<div><label>Total general (USD)</label><strong style="font-size:1.1rem;color:var(--green)">$' + grand.toFixed(2) + '</strong></div>' +
+    '</div>';
+}
+
+// ── Costos manuales ───────────────────────────────────────
+function addManualCost() {
+  var nombre = document.getElementById('new-costo-nombre').value.trim();
+  var itemId = document.getElementById('new-costo-item').value.trim();
+  var valor  = parseFloat(document.getElementById('new-costo-valor').value || 0);
+  var tipo   = document.getElementById('new-costo-tipo').value;
+  if (!nombre || !itemId) return toast('⚠️ Nombre e ID de item son requeridos');
+  pendingNew.push({ nombre: nombre, tipo: tipo, valor_usd_kg: valor, cot_item_id: itemId });
+  toast('✅ Costo "' + nombre + '" agregado (pendiente de guardar)');
+  document.getElementById('new-costo-nombre').value = '';
+  document.getElementById('new-costo-item').value   = '';
+  document.getElementById('new-costo-valor').value  = '';
+}
+
+async function saveCotizacion() {
+  if (!currentCotId) return toast('⚠️ No hay cotización cargada');
+  var costos        = Object.values(pendingEdits);
+  var costos_nuevos = pendingNew;
+  if (!costos.length && !costos_nuevos.length) return toast('ℹ️ Sin cambios que guardar');
+  toast('⏳ Guardando...');
+  var res = await apiPost({
+    action: 'guardarCotizacion',
+    cotizacion_id: currentCotId,
+    usuario:       USUARIO,
+    costos:        costos,
+    costos_nuevos: costos_nuevos,
+  });
+  if (!res.ok) return toast('❌ Error: ' + res.error);
+  toast('✅ Cotización guardada con historial de auditoría');
+  pendingEdits = {};
+  pendingNew   = [];
+  await loadCotizacion(currentCotId);
+}
+
+function resetEditor() {
+  pendingEdits = {};
+  pendingNew   = [];
+  if (currentCotId) loadCotizacion(currentCotId);
+}
+
+// ── Init ──────────────────────────────────────────────────
+async function init() {
+  document.getElementById('rfq-fecha').value = new Date().toISOString().slice(0, 10);
+  try {
+    var res = await apiGet({ action: 'getVariedades' });
+    if (res.ok) variedades = res.variedades.map(function(v) { return v.nombre; });
+  } catch(e) { /* continúa sin catálogo */ }
+  addRfqItem();
+}
+
 document.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>
-
-
