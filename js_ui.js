@@ -314,16 +314,3 @@ function renderSummaryFromState() {
         '<strong style="font-size:1.1rem;color:var(--green)">$' + grand.toFixed(2) + '</strong></div>' +
     '</div>';
 }
-
-// ── Datalist de variedades ────────────────────────────────
-function updateDatalist() {
-  var dl = document.getElementById('variedades-list');
-  if (!dl) {
-    dl = document.createElement('datalist');
-    dl.id = 'variedades-list';
-    document.body.appendChild(dl);
-  }
-  dl.innerHTML = variedades
-    .map(function(v) { return '<option value="' + v + '">'; })
-    .join('');
-}
