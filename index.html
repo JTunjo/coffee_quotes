@@ -66,6 +66,32 @@
   /* ── Toast ──────────────────────────────────────── */
   #toast { position: fixed; bottom: 1.5rem; right: 1.5rem; background: var(--accent); color: #fff; padding: .75rem 1.2rem; border-radius: var(--radius); box-shadow: var(--shadow); display: none; z-index: 999; font-size: .9rem; }
 
+  /* ── Popup de resultado ─────────────────────────────────── */
+  #result-popup {
+    position: fixed; inset: 0; background: rgba(0,0,0,.45);
+    z-index: 1100; display: flex; align-items: center; justify-content: center;
+  }
+  #result-popup:not(.hidden) { display: flex !important; }
+  .popup-box {
+    background: var(--surface); border-radius: var(--radius);
+    box-shadow: 0 8px 32px rgba(0,0,0,.18); padding: 2rem 2.5rem;
+    max-width: 480px; width: 90%; text-align: center; position: relative;
+    animation: popIn .25s ease;
+  }
+  @keyframes popIn {
+    from { transform: scale(.85); opacity: 0; }
+    to   { transform: scale(1);   opacity: 1; }
+  }
+  .popup-icon { font-size: 3rem; margin-bottom: .75rem; }
+  .popup-title { font-size: 1.1rem; font-weight: 700; margin-bottom: .5rem; }
+  .popup-msg { font-size: .88rem; color: var(--muted); line-height: 1.5; }
+  .popup-close {
+    position: absolute; top: .75rem; right: .75rem;
+    background: none; border: none; font-size: 1.2rem;
+    cursor: pointer; color: var(--muted); line-height: 1;
+  }
+  .popup-close:hover { color: var(--text); }
+
   /* ── Tag ────────────────────────────────────────── */
   .tag { display: inline-block; padding: .2rem .55rem; border-radius: 99px; font-size: .72rem; font-weight: 700; }
   .tag-green { background: #e8f5e9; color: var(--green); }
@@ -203,6 +229,16 @@
 
 <div id="toast"></div>
 
+<!-- Popup resultado crear RFQ -->
+<div id="result-popup" class="hidden">
+  <div class="popup-box">
+    <button class="popup-close" onclick="closeResultPopup()">✕</button>
+    <div class="popup-icon" id="popup-icon"></div>
+    <div class="popup-title" id="popup-title"></div>
+    <div class="popup-msg" id="popup-msg"></div>
+  </div>
+</div>
+
 <!-- Modal selección de lote -->
 <div id="modal-lote" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:1000;display:flex;align-items:center;justify-content:center">
   <div style="background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow);padding:1.5rem;max-width:560px;width:90%;max-height:80vh;overflow-y:auto">
@@ -240,12 +276,49 @@ function showPage(p) {
   if (p === 'list') loadRFQList();
 }
 
-// ── Toast ─────────────────────────────────────────────────
-function toast(msg, duration = 3000) {
-  const el = document.getElementById('toast');
-  el.textContent = msg;
-  el.style.display = 'block';
-  setTimeout(() => el.style.display = 'none', duration);
+// ── Popup de resultado ────────────────────────────────────
+let _popupSuccessTimer = null;
+
+function showPopupSuccess() {
+  document.getElementById('popup-icon').textContent  = '✅';
+  document.getElementById('popup-title').textContent = '¡Cotización creada exitosamente!';
+  document.getElementById('popup-msg').textContent   = '';
+  document.querySelector('#result-popup .popup-close').style.display = 'none';
+  document.getElementById('result-popup').classList.remove('hidden');
+  // Auto-cierre a 1 segundo
+  _popupSuccessTimer = setTimeout(() => closeResultPopup(), 1000);
+}
+
+function showPopupError(errorMsg) {
+  document.getElementById('popup-icon').textContent  = '❌';
+  document.getElementById('popup-title').textContent = 'Error al crear el RFQ';
+  document.getElementById('popup-msg').innerHTML =
+    `<p style="margin-bottom:.75rem">${errorMsg}</p>
+     <p>Por favor verifica la información e inténtalo de nuevo.<br>
+     Si el error persiste, puede que se hayan guardado datos parciales. Revisa y borra manualmente las filas creadas en:</p>
+     <ul style="text-align:left;margin:.5rem 0 0 1.2rem;line-height:1.8">
+       <li><strong>RFQ</strong></li>
+       <li><strong>RFQ_items</strong></li>
+       <li><strong>Cotizaciones</strong></li>
+       <li><strong>Cotizacion_items</strong></li>
+     </ul>`;
+  document.querySelector('#result-popup .popup-close').style.display = 'block';
+  document.getElementById('result-popup').classList.remove('hidden');
+}
+
+function closeResultPopup() {
+  if (_popupSuccessTimer) { clearTimeout(_popupSuccessTimer); _popupSuccessTimer = null; }
+  document.getElementById('result-popup').classList.add('hidden');
+}
+
+// ── Reset formulario RFQ ──────────────────────────────────
+function resetRfqForm() {
+  document.getElementById('rfq-cliente').value = '';
+  document.getElementById('rfq-asesor').value  = '';
+  document.getElementById('rfq-fecha').value   = new Date().toISOString().slice(0, 10);
+  document.getElementById('rfq-items-container').innerHTML = '';
+  rfqItemCount = 0;
+  addRfqItem();
 }
 
 // ── API helpers (JSONP — resuelve CORS con Google Apps Script) ────
@@ -387,7 +460,7 @@ async function submitRFQ() {
   const items   = collectRfqItems();
 
   if (!cliente || !asesor) return toast('⚠️ Completa cliente y asesor');
-  if (!items.length) return toast('⚠️ Agrega al menos un ítem');
+  if (!items.length)        return toast('⚠️ Agrega al menos un ítem');
 
   const errores = validateRfqItems(items);
   if (errores.length) {
@@ -396,13 +469,30 @@ async function submitRFQ() {
   }
 
   toast('⏳ Creando RFQ...');
-  const res = await apiPost({ action: 'crearRFQ', cliente, asesor, fecha, items });
-  if (!res.ok) return toast('❌ Error: ' + res.error);
+  try {
+    const res = await apiPost({ action: 'crearRFQ', cliente, asesor, fecha, items });
 
-  toast(`✅ RFQ creado. Abriendo cotización...`);
-  document.getElementById('cot-search-id').value = res.cotizacion_id;
-  showPage('cot');
-  loadCotizacion(res.cotizacion_id);
+    // Siempre limpiar el formulario (éxito o error)
+    resetRfqForm();
+
+    if (!res.ok) {
+      showPopupError(res.error || 'Error desconocido del servidor.');
+      return;
+    }
+
+    // Éxito
+    showPopupSuccess();
+    // Después del auto-cierre, navegar a la cotización
+    setTimeout(() => {
+      document.getElementById('cot-search-id').value = res.cotizacion_id;
+      showPage('cot');
+      loadCotizacion(res.cotizacion_id);
+    }, 1100);
+
+  } catch (err) {
+    resetRfqForm();
+    showPopupError('No se pudo conectar con el servidor. Verifica tu conexión e inténtalo de nuevo.');
+  }
 }
 
 // ══════════════════════════════════════════════════════════
