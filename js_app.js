@@ -215,14 +215,39 @@ async function loadCotizacion(cotId) {
   pendingEdits = {};
   pendingNew   = [];
 
-  renderCotizacion(res);
+  // ── Modo solo lectura si está Enviado ─────────────────
+  var enviado = (res.cotizacion.estado || '').toLowerCase() === 'enviado';
+  renderCotizacion(res, enviado);
   document.getElementById('cot-editor').classList.remove('hidden');
 
+  // Controles de edición: ocultar si está enviado
+  document.getElementById('seccion-costo-manual').classList.toggle('hidden', enviado);
+  document.getElementById('botones-cotizacion').classList.toggle('hidden', enviado);
+  document.getElementById('btn-imprimir').disabled = false; // enviado siempre puede imprimir
+
+  if (enviado) {
+    toast('✅ Cotización enviada — solo lectura');
+    return;
+  }
+
+  // ── Verificar disponibilidad ───────────────────────────
   toast('⏳ Verificando disponibilidad...');
   var vRes = await apiGet({ action: 'verificarDisponibilidad', cotizacionId: cotId });
   if (!vRes.ok) { toast('❌ Error al verificar disponibilidad'); return; }
 
-  await handleVerificacion(vRes, cotId);
+  // Recargar cotización con lotes ya asignados por la verificación
+  var res2 = await apiGet({ action: 'getCotizacion', cotizacionId: cotId });
+  if (res2.ok) {
+    cotState = res2;
+    renderCotizacion(res2, false, vRes.resultados);
+  }
+
+  renderDisponibilidadBanner(vRes.resultados);
+  document.getElementById('btn-imprimir').disabled = vRes.hay_incompletos;
+  document.getElementById('btn-imprimir').title = vRes.hay_incompletos
+    ? 'Resuelve los ítems sin disponibilidad para imprimir'
+    : 'Imprimir cotización';
+
   toast('✅ Cotización lista');
 }
 
@@ -305,11 +330,16 @@ async function init() {
   document.getElementById('rfq-fecha').value = new Date().toISOString().slice(0, 10);
   try {
     var res = await apiGet({ action: 'getVariedades' });
-    if (res.ok && res.variedades.length) {
-      variedades = res.variedades.map(function(v) { return v.nombre; });
+    console.log('[init] getVariedades →', res);
+    if (res && res.ok && res.variedades && res.variedades.length) {
+      variedades = res.variedades.map(function(v) { return String(v.nombre).trim(); });
+      console.log('[init] variedades cargadas:', variedades);
+    } else {
+      console.warn('[init] No se cargaron variedades. Respuesta:', res);
     }
-  } catch(e) { /* continúa sin catálogo */ }
-  // addRfqItem se llama DESPUÉS de cargar variedades
+  } catch(e) {
+    console.error('[init] Error cargando variedades:', e);
+  }
   addRfqItem();
 }
 
