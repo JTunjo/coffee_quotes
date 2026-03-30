@@ -296,10 +296,33 @@ async function saveCotizacion() {
 
   var costos        = Object.values(pendingEdits);
   var costos_nuevos = pendingNew;
-  if (!costos.length && !costos_nuevos.length)
+
+  // Recoger cambios de lote pendientes desde los selectores inline
+  var lotesCambiados = [];
+  document.querySelectorAll('select[data-lote-selector]').forEach(function(sel) {
+    if (sel.dataset.loteOriginal !== sel.value) {
+      lotesCambiados.push({
+        cot_item_id: sel.dataset.cotItemId,
+        lote_id:     sel.value,
+      });
+    }
+  });
+
+  if (!costos.length && !costos_nuevos.length && !lotesCambiados.length)
     return toast('ℹ️ Sin cambios que guardar');
 
   toast('⏳ Guardando...');
+
+  // Guardar cambios de lote primero
+  for (var i = 0; i < lotesCambiados.length; i++) {
+    await apiPost({
+      action:        'asignarLote',
+      lote_id:       lotesCambiados[i].lote_id,
+      cot_item_id:   lotesCambiados[i].cot_item_id,
+      cotizacion_id: currentCotId,
+    });
+  }
+
   var res = await apiPost({
     action:        'guardarCotizacion',
     cotizacion_id: currentCotId,
@@ -310,7 +333,7 @@ async function saveCotizacion() {
 
   if (!res.ok) return toast('❌ Error: ' + res.error);
 
-  toast('✅ Cotización guardada con historial de auditoría');
+  toast('✅ Cotización guardada');
   pendingEdits = {};
   pendingNew   = [];
   await loadCotizacion(currentCotId);
