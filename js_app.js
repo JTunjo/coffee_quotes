@@ -212,6 +212,7 @@ async function loadCotizacion(cotId) {
 
   currentCotId = cotId;
   cotState     = res;
+  cotState.rfqItems = res.rfqItems || [];
   pendingEdits = {};
   pendingNew   = [];
 
