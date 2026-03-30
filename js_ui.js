@@ -57,44 +57,33 @@ function closeResultPopup() {
   document.getElementById('result-popup').classList.remove('show');
 }
 
-// ── Modal selección de lote ───────────────────────────────
-function mostrarModalSeleccionLote(item, cotId) {
-  return new Promise(function(resolve) {
-    var modal = document.getElementById('modal-lote');
-    document.getElementById('modal-lote-title').textContent =
-      'Selecciona lote para: ' + item.variedad;
+// Recalcula en pantalla al cambiar el lote desde el selector inline
+function onLoteChange(sel, cotItemId, cantidad, presentacion) {
+  var loteId = sel.value;
 
-    document.getElementById('modal-lote-body').innerHTML = item.lotes.map(function(l) {
-      return '<div style="border:1px solid var(--border);border-radius:var(--radius);' +
-        'padding:.75rem;margin-bottom:.5rem;cursor:pointer" ' +
-        'onmouseover="this.style.background=\'#f0ebe3\'" ' +
-        'onmouseout="this.style.background=\'\'" ' +
-        'onclick="seleccionarLote(\'' + l.lote_id + '\',\'' +
-          item.cot_item_id + '\',\'' + cotId + '\')">' +
-        '<strong>' + l.variedad + '</strong> · ' + l.origen + ' · ' + l.proceso +
-        '<div style="font-size:.8rem;color:var(--muted);margin-top:.25rem">' +
-          l.fecha_disponible_desde + ' → ' + l.fecha_disponible_hasta +
-          ' &nbsp;|&nbsp; Stock: ' + l.kilos_disponibles + ' kg' +
-          ' &nbsp;|&nbsp; <strong>$' + parseFloat(l.costo_usd_kg).toFixed(2) + '/kg</strong>' +
-        '</div></div>';
-    }).join('');
+  // Buscar el costo del lote seleccionado en los resultados de disponibilidad
+  // Los datos del lote están en el dataset del option seleccionado
+  var selectedOpt = sel.options[sel.selectedIndex];
+  // Extraer costo desde el texto de la opción no es fiable;
+  // buscamos en cotState que tiene los lotes disponibles
+  var nuevoCostoKg = 0;
+  if (cotState) {
+    // Buscar en disponibilidades cargadas via verificación
+    // El select fue construido con los lotes del resultadosDisp — los guardamos en data-*
+    nuevoCostoKg = parseFloat(sel.dataset['costo_' + loteId] || 0);
+  }
 
-    modal.classList.add('show');
-    modal._resolve = resolve;
-  });
+  // Actualizar costo lote en los inputs del item para recalcular
+  var inputs = document.querySelectorAll('[data-item-id="' + cotItemId + '"]');
+  inputs.forEach(function(i) { i.dataset.loteCosto = nuevoCostoKg; });
+
+  // Recalcular totales del item
+  recalcItemUI(cotItemId, nuevoCostoKg, cantidad, presentacion);
+  renderSummaryFromState();
 }
 
-async function seleccionarLote(loteId, cotItemId, cotId) {
-  var modal = document.getElementById('modal-lote');
-  modal.classList.remove('show');
-  await apiPost({
-    action:        'asignarLote',
-    lote_id:       loteId,
-    cot_item_id:   cotItemId,
-    cotizacion_id: cotId
-  });
-  if (modal._resolve) { modal._resolve(); modal._resolve = null; }
-}
+// Eliminar modal de lote ya no necesario
+
 
 // ── Banner disponibilidad ─────────────────────────────────
 function renderDisponibilidadBanner(resultados) {
@@ -140,10 +129,17 @@ function labelUnidad(presentacion) {
 }
 
 // ── Render cotización ─────────────────────────────────────
-function renderCotizacion(data) {
+function renderCotizacion(data, soloLectura, resultadosDisp) {
+  soloLectura    = soloLectura    || false;
+  resultadosDisp = resultadosDisp || [];
+
   var cotizacion = data.cotizacion;
   var items      = data.items;
   var costos     = data.costos;
+
+  // Mapa rápido de resultados de disponibilidad por cot_item_id
+  var dispMap = {};
+  resultadosDisp.forEach(function(r) { dispMap[r.cot_item_id] = r; });
 
   document.getElementById('cot-header-info').innerHTML =
     '<div><label>ID Cotización</label>' +
@@ -151,14 +147,18 @@ function renderCotizacion(data) {
     '<div><label>Cliente</label><strong>' + cotizacion.cliente + '</strong></div>' +
     '<div><label>Asesor</label><strong>'  + cotizacion.asesor  + '</strong></div>' +
     '<div><label>Estado</label>' +
-      '<span class="tag tag-yellow">' + cotizacion.estado + '</span></div>' +
+      '<span class="tag ' + (soloLectura ? 'tag-green' : 'tag-yellow') + '">' +
+      cotizacion.estado + '</span></div>' +
     '<div><label>Actualizado</label>' +
-      '<span class="text-muted">' + (cotizacion.updated_at || '—') + '</span></div>';
+      '<span class="text-muted">' + (cotizacion.updated_at || '—') + '</span></div>' +
+    (soloLectura ? '<div><span class="tag tag-blue">🔒 Solo lectura</span></div>' : '');
 
   var section = document.getElementById('cot-items-section');
   section.innerHTML = '';
 
   items.forEach(function(item) {
+    var dispResult   = dispMap[item.cot_item_id] || {};
+    var sinDisp      = dispResult.estado === 'sin_disponibilidad';
     var itemCostos   = costos.filter(function(c) { return c.cot_item_id === item.cot_item_id; });
     var sumaCostosKg = itemCostos.reduce(function(s, c) {
       return s + parseFloat(c.valor_usd_kg || 0);
@@ -167,43 +167,519 @@ function renderCotizacion(data) {
     var factor         = factorPresentacion(item.presentacion, item.cantidad_unidades);
     var precioUnitario = precioFinalKg * factor;
     var cantidad       = parseFloat(item.cantidad_unidades || 0);
-    var totalUsd       = item.presentacion === 'Granel'
-      ? precioUnitario
-      : precioUnitario * cantidad;
+    var totalUsd       = item.presentacion === 'Granel' ? precioUnitario : precioUnitario * cantidad;
 
+    // Estilo de la card según disponibilidad
+    var cardBorder = sinDisp ? 'border:2px solid var(--red)' : '';
     var card = document.createElement('div');
     card.className = 'card';
+    card.setAttribute('style', cardBorder);
+
+    // Badge de sin disponibilidad
+    var badgeSinDisp = sinDisp
+      ? '<span style="background:var(--red);color:#fff;font-size:.72rem;font-weight:700;' +
+        'padding:.2rem .6rem;border-radius:99px;margin-left:.5rem">⚠ Sin disponibilidad</span>'
+      : '';
+
+    // Selector de lote (solo si no es solo lectura y hay más de 1 lote válido)
+    var selectorLote = '';
+    if (!soloLectura && dispResult.lotes && dispResult.lotes.length > 1) {
+      var opts = dispResult.lotes.map(function(l) {
+        var sel = l.lote_id === item.lote_id ? ' selected' : '';
+        return '<option value="' + l.lote_id + '"' + sel + '>' +
+          l.origen + ' · ' + l.proceso +
+          ' · 
+
+function onCostoChange(input) {
+  var costoId      = input.dataset.costoId;
+  var itemId       = input.dataset.itemId;
+  var cantidad     = parseFloat(input.dataset.cantidad || 0);
+  var presentacion = input.dataset.presentacion;
+  var loteCosto    = parseFloat(input.dataset.loteCosto || 0);
+  var newVal       = parseFloat(input.value || 0);
+
+  pendingEdits[costoId] = { costo_id: costoId, valor_usd_kg: newVal, cot_item_id: itemId };
+
+  var factor   = factorPresentacion(presentacion, cantidad);
+  var subUn    = newVal * factor;
+  var subTotal = presentacion === 'Granel' ? subUn : subUn * cantidad;
+  document.getElementById('sub-' + costoId).textContent = '$' + subTotal.toFixed(2);
+
+  recalcItemUI(itemId, loteCosto, cantidad, presentacion);
+  renderSummaryFromState();
+}
+
+function recalcItemUI(itemId, loteCosto, cantidad, presentacion) {
+  var inputs = document.querySelectorAll('[data-item-id="' + itemId + '"]');
+  var sumaCostosKg = 0;
+  inputs.forEach(function(i) { sumaCostosKg += parseFloat(i.value || 0); });
+
+  var precioFinalKg  = loteCosto + sumaCostosKg;
+  var factor         = factorPresentacion(presentacion, cantidad);
+  var precioUnitario = precioFinalKg * factor;
+  var totalUsd       = presentacion === 'Granel' ? precioUnitario : precioUnitario * cantidad;
+
+  var pfEl  = document.getElementById('pf-'  + itemId);
+  var puEl  = document.getElementById('pu-'  + itemId);
+  var totEl = document.getElementById('tot-' + itemId);
+  if (pfEl)  pfEl.textContent  = '$' + precioFinalKg.toFixed(4);
+  if (puEl)  puEl.textContent  = '$' + precioUnitario.toFixed(4);
+  if (totEl) totEl.textContent = '$' + totalUsd.toFixed(2);
+}
+
+function renderSummary(items, costos) {
+  var grand = 0;
+  items.forEach(function(item) {
+    var sum = costos
+      .filter(function(c) { return c.cot_item_id === item.cot_item_id; })
+      .reduce(function(s, c) { return s + parseFloat(c.valor_usd_kg || 0); }, 0);
+    var pf     = parseFloat(item.costo_lote_kg || 0) + sum;
+    var factor = factorPresentacion(item.presentacion, item.cantidad_unidades);
+    var pu     = pf * factor;
+    var cant   = parseFloat(item.cantidad_unidades || 0);
+    grand += item.presentacion === 'Granel' ? pu : pu * cant;
+  });
+
+  document.getElementById('cot-summary').innerHTML =
+    '<strong>Resumen de cotización</strong>' +
+    '<div class="form-grid mt-1">' +
+      '<div><label>Ítems</label><strong>' + items.length + '</strong></div>' +
+      '<div><label>Total general (USD)</label>' +
+        '<strong style="font-size:1.1rem;color:var(--green)">$' + grand.toFixed(2) + '</strong></div>' +
+    '</div>';
+}
+
+function renderSummaryFromState() {
+  if (!cotState) return;
+  var grand = 0;
+  cotState.items.forEach(function(item) {
+    var inputs = document.querySelectorAll('[data-item-id="' + item.cot_item_id + '"]');
+    var sumaCostosKg = 0;
+    inputs.forEach(function(i) { sumaCostosKg += parseFloat(i.value || 0); });
+    var pf     = parseFloat(item.costo_lote_kg || 0) + sumaCostosKg;
+    var factor = factorPresentacion(item.presentacion, item.cantidad_unidades);
+    var pu     = pf * factor;
+    var cant   = parseFloat(item.cantidad_unidades || 0);
+    grand += item.presentacion === 'Granel' ? pu : pu * cant;
+  });
+
+  var el = document.getElementById('cot-summary');
+  if (el) el.innerHTML =
+    '<strong>Resumen de cotización</strong>' +
+    '<div class="form-grid mt-1">' +
+      '<div><label>Ítems</label><strong>' + cotState.items.length + '</strong></div>' +
+      '<div><label>Total general (USD)</label>' +
+        '<strong style="font-size:1.1rem;color:var(--green)">$' + grand.toFixed(2) + '</strong></div>' +
+    '</div>';
+}
+
+
+ + parseFloat(l.costo_usd_kg).toFixed(2) + '/kg' +
+          ' · ' + l.kilos_disponibles + ' kg disponibles' +
+          '</option>';
+      }).join('');
+      selectorLote =
+        '<div style="margin-bottom:.75rem">' +
+          '<label>Lote disponible</label>' +
+          '<select data-lote-selector="1" ' +
+            'data-cot-item-id="' + item.cot_item_id + '" ' +
+            'data-lote-original="' + (item.lote_id || '') + '" ' +
+            'onchange="onLoteChange(this,\'' + item.cot_item_id + '\',' +
+              parseFloat(item.cantidad_unidades) + ',\'' + item.presentacion + '\')">' +
+            opts +
+          '</select>' +
+        '</div>';
+    } else if (!soloLectura && item.lote_id) {
+      // Un solo lote — mostrar como texto
+      selectorLote =
+        '<div style="margin-bottom:.75rem">' +
+          '<label>Lote asignado</label>' +
+          '<span style="font-size:.85rem">' + item.lote_id + '</span>' +
+        '</div>';
+    }
+
+    // Filas de costos — readonly si aplica
+    var costoRows = itemCostos.map(function(c) {
+      return renderCostoRow(c, item, soloLectura);
+    }).join('');
+
     card.innerHTML =
       '<div class="card-title">' +
         '📦 ' + (item.variedad || '—') + ' · ' + (item.origen || '—') +
         ' <span class="tag tag-blue" style="margin-left:.5rem">' + item.presentacion + '</span>' +
         ' <span class="tag tag-green" style="margin-left:.25rem">' + item.tier + '</span>' +
+        badgeSinDisp +
       '</div>' +
       '<div class="form-grid" style="margin-bottom:.75rem">' +
-        '<div><label>Lote ID</label><span>' + (item.lote_id || '—') + '</span></div>' +
         '<div><label>Presentación</label><span>' + item.presentacion + '</span></div>' +
         '<div><label>Cantidad</label><span>' +
           item.cantidad_unidades + ' ' + labelUnidad(item.presentacion) + '</span></div>' +
         '<div><label>Costo lote (USD/kg)</label>' +
-          '<span>$' + parseFloat(item.costo_lote_kg || 0).toFixed(4) + '</span></div>' +
+          '<span' + (sinDisp ? ' style="color:var(--red);font-weight:700"' : '') + '>' +
+          '
+
+function onCostoChange(input) {
+  var costoId      = input.dataset.costoId;
+  var itemId       = input.dataset.itemId;
+  var cantidad     = parseFloat(input.dataset.cantidad || 0);
+  var presentacion = input.dataset.presentacion;
+  var loteCosto    = parseFloat(input.dataset.loteCosto || 0);
+  var newVal       = parseFloat(input.value || 0);
+
+  pendingEdits[costoId] = { costo_id: costoId, valor_usd_kg: newVal, cot_item_id: itemId };
+
+  var factor   = factorPresentacion(presentacion, cantidad);
+  var subUn    = newVal * factor;
+  var subTotal = presentacion === 'Granel' ? subUn : subUn * cantidad;
+  document.getElementById('sub-' + costoId).textContent = '$' + subTotal.toFixed(2);
+
+  recalcItemUI(itemId, loteCosto, cantidad, presentacion);
+  renderSummaryFromState();
+}
+
+function recalcItemUI(itemId, loteCosto, cantidad, presentacion) {
+  var inputs = document.querySelectorAll('[data-item-id="' + itemId + '"]');
+  var sumaCostosKg = 0;
+  inputs.forEach(function(i) { sumaCostosKg += parseFloat(i.value || 0); });
+
+  var precioFinalKg  = loteCosto + sumaCostosKg;
+  var factor         = factorPresentacion(presentacion, cantidad);
+  var precioUnitario = precioFinalKg * factor;
+  var totalUsd       = presentacion === 'Granel' ? precioUnitario : precioUnitario * cantidad;
+
+  var pfEl  = document.getElementById('pf-'  + itemId);
+  var puEl  = document.getElementById('pu-'  + itemId);
+  var totEl = document.getElementById('tot-' + itemId);
+  if (pfEl)  pfEl.textContent  = '$' + precioFinalKg.toFixed(4);
+  if (puEl)  puEl.textContent  = '$' + precioUnitario.toFixed(4);
+  if (totEl) totEl.textContent = '$' + totalUsd.toFixed(2);
+}
+
+function renderSummary(items, costos) {
+  var grand = 0;
+  items.forEach(function(item) {
+    var sum = costos
+      .filter(function(c) { return c.cot_item_id === item.cot_item_id; })
+      .reduce(function(s, c) { return s + parseFloat(c.valor_usd_kg || 0); }, 0);
+    var pf     = parseFloat(item.costo_lote_kg || 0) + sum;
+    var factor = factorPresentacion(item.presentacion, item.cantidad_unidades);
+    var pu     = pf * factor;
+    var cant   = parseFloat(item.cantidad_unidades || 0);
+    grand += item.presentacion === 'Granel' ? pu : pu * cant;
+  });
+
+  document.getElementById('cot-summary').innerHTML =
+    '<strong>Resumen de cotización</strong>' +
+    '<div class="form-grid mt-1">' +
+      '<div><label>Ítems</label><strong>' + items.length + '</strong></div>' +
+      '<div><label>Total general (USD)</label>' +
+        '<strong style="font-size:1.1rem;color:var(--green)">$' + grand.toFixed(2) + '</strong></div>' +
+    '</div>';
+}
+
+function renderSummaryFromState() {
+  if (!cotState) return;
+  var grand = 0;
+  cotState.items.forEach(function(item) {
+    var inputs = document.querySelectorAll('[data-item-id="' + item.cot_item_id + '"]');
+    var sumaCostosKg = 0;
+    inputs.forEach(function(i) { sumaCostosKg += parseFloat(i.value || 0); });
+    var pf     = parseFloat(item.costo_lote_kg || 0) + sumaCostosKg;
+    var factor = factorPresentacion(item.presentacion, item.cantidad_unidades);
+    var pu     = pf * factor;
+    var cant   = parseFloat(item.cantidad_unidades || 0);
+    grand += item.presentacion === 'Granel' ? pu : pu * cant;
+  });
+
+  var el = document.getElementById('cot-summary');
+  if (el) el.innerHTML =
+    '<strong>Resumen de cotización</strong>' +
+    '<div class="form-grid mt-1">' +
+      '<div><label>Ítems</label><strong>' + cotState.items.length + '</strong></div>' +
+      '<div><label>Total general (USD)</label>' +
+        '<strong style="font-size:1.1rem;color:var(--green)">$' + grand.toFixed(2) + '</strong></div>' +
+    '</div>';
+}
+
+
+ + parseFloat(item.costo_lote_kg || 0).toFixed(4) + '</span></div>' +
         '<div><label>Precio/kg final</label>' +
-          '<strong id="pf-' + item.cot_item_id + '">$' + precioFinalKg.toFixed(4) + '</strong></div>' +
+          '<strong id="pf-' + item.cot_item_id + '">
+
+function onCostoChange(input) {
+  var costoId      = input.dataset.costoId;
+  var itemId       = input.dataset.itemId;
+  var cantidad     = parseFloat(input.dataset.cantidad || 0);
+  var presentacion = input.dataset.presentacion;
+  var loteCosto    = parseFloat(input.dataset.loteCosto || 0);
+  var newVal       = parseFloat(input.value || 0);
+
+  pendingEdits[costoId] = { costo_id: costoId, valor_usd_kg: newVal, cot_item_id: itemId };
+
+  var factor   = factorPresentacion(presentacion, cantidad);
+  var subUn    = newVal * factor;
+  var subTotal = presentacion === 'Granel' ? subUn : subUn * cantidad;
+  document.getElementById('sub-' + costoId).textContent = '$' + subTotal.toFixed(2);
+
+  recalcItemUI(itemId, loteCosto, cantidad, presentacion);
+  renderSummaryFromState();
+}
+
+function recalcItemUI(itemId, loteCosto, cantidad, presentacion) {
+  var inputs = document.querySelectorAll('[data-item-id="' + itemId + '"]');
+  var sumaCostosKg = 0;
+  inputs.forEach(function(i) { sumaCostosKg += parseFloat(i.value || 0); });
+
+  var precioFinalKg  = loteCosto + sumaCostosKg;
+  var factor         = factorPresentacion(presentacion, cantidad);
+  var precioUnitario = precioFinalKg * factor;
+  var totalUsd       = presentacion === 'Granel' ? precioUnitario : precioUnitario * cantidad;
+
+  var pfEl  = document.getElementById('pf-'  + itemId);
+  var puEl  = document.getElementById('pu-'  + itemId);
+  var totEl = document.getElementById('tot-' + itemId);
+  if (pfEl)  pfEl.textContent  = '$' + precioFinalKg.toFixed(4);
+  if (puEl)  puEl.textContent  = '$' + precioUnitario.toFixed(4);
+  if (totEl) totEl.textContent = '$' + totalUsd.toFixed(2);
+}
+
+function renderSummary(items, costos) {
+  var grand = 0;
+  items.forEach(function(item) {
+    var sum = costos
+      .filter(function(c) { return c.cot_item_id === item.cot_item_id; })
+      .reduce(function(s, c) { return s + parseFloat(c.valor_usd_kg || 0); }, 0);
+    var pf     = parseFloat(item.costo_lote_kg || 0) + sum;
+    var factor = factorPresentacion(item.presentacion, item.cantidad_unidades);
+    var pu     = pf * factor;
+    var cant   = parseFloat(item.cantidad_unidades || 0);
+    grand += item.presentacion === 'Granel' ? pu : pu * cant;
+  });
+
+  document.getElementById('cot-summary').innerHTML =
+    '<strong>Resumen de cotización</strong>' +
+    '<div class="form-grid mt-1">' +
+      '<div><label>Ítems</label><strong>' + items.length + '</strong></div>' +
+      '<div><label>Total general (USD)</label>' +
+        '<strong style="font-size:1.1rem;color:var(--green)">$' + grand.toFixed(2) + '</strong></div>' +
+    '</div>';
+}
+
+function renderSummaryFromState() {
+  if (!cotState) return;
+  var grand = 0;
+  cotState.items.forEach(function(item) {
+    var inputs = document.querySelectorAll('[data-item-id="' + item.cot_item_id + '"]');
+    var sumaCostosKg = 0;
+    inputs.forEach(function(i) { sumaCostosKg += parseFloat(i.value || 0); });
+    var pf     = parseFloat(item.costo_lote_kg || 0) + sumaCostosKg;
+    var factor = factorPresentacion(item.presentacion, item.cantidad_unidades);
+    var pu     = pf * factor;
+    var cant   = parseFloat(item.cantidad_unidades || 0);
+    grand += item.presentacion === 'Granel' ? pu : pu * cant;
+  });
+
+  var el = document.getElementById('cot-summary');
+  if (el) el.innerHTML =
+    '<strong>Resumen de cotización</strong>' +
+    '<div class="form-grid mt-1">' +
+      '<div><label>Ítems</label><strong>' + cotState.items.length + '</strong></div>' +
+      '<div><label>Total general (USD)</label>' +
+        '<strong style="font-size:1.1rem;color:var(--green)">$' + grand.toFixed(2) + '</strong></div>' +
+    '</div>';
+}
+
+
+ + precioFinalKg.toFixed(4) + '</strong></div>' +
         '<div><label>Precio/' + labelUnidad(item.presentacion) + '</label>' +
-          '<strong id="pu-' + item.cot_item_id + '">$' + precioUnitario.toFixed(4) + '</strong></div>' +
+          '<strong id="pu-' + item.cot_item_id + '">
+
+function onCostoChange(input) {
+  var costoId      = input.dataset.costoId;
+  var itemId       = input.dataset.itemId;
+  var cantidad     = parseFloat(input.dataset.cantidad || 0);
+  var presentacion = input.dataset.presentacion;
+  var loteCosto    = parseFloat(input.dataset.loteCosto || 0);
+  var newVal       = parseFloat(input.value || 0);
+
+  pendingEdits[costoId] = { costo_id: costoId, valor_usd_kg: newVal, cot_item_id: itemId };
+
+  var factor   = factorPresentacion(presentacion, cantidad);
+  var subUn    = newVal * factor;
+  var subTotal = presentacion === 'Granel' ? subUn : subUn * cantidad;
+  document.getElementById('sub-' + costoId).textContent = '$' + subTotal.toFixed(2);
+
+  recalcItemUI(itemId, loteCosto, cantidad, presentacion);
+  renderSummaryFromState();
+}
+
+function recalcItemUI(itemId, loteCosto, cantidad, presentacion) {
+  var inputs = document.querySelectorAll('[data-item-id="' + itemId + '"]');
+  var sumaCostosKg = 0;
+  inputs.forEach(function(i) { sumaCostosKg += parseFloat(i.value || 0); });
+
+  var precioFinalKg  = loteCosto + sumaCostosKg;
+  var factor         = factorPresentacion(presentacion, cantidad);
+  var precioUnitario = precioFinalKg * factor;
+  var totalUsd       = presentacion === 'Granel' ? precioUnitario : precioUnitario * cantidad;
+
+  var pfEl  = document.getElementById('pf-'  + itemId);
+  var puEl  = document.getElementById('pu-'  + itemId);
+  var totEl = document.getElementById('tot-' + itemId);
+  if (pfEl)  pfEl.textContent  = '$' + precioFinalKg.toFixed(4);
+  if (puEl)  puEl.textContent  = '$' + precioUnitario.toFixed(4);
+  if (totEl) totEl.textContent = '$' + totalUsd.toFixed(2);
+}
+
+function renderSummary(items, costos) {
+  var grand = 0;
+  items.forEach(function(item) {
+    var sum = costos
+      .filter(function(c) { return c.cot_item_id === item.cot_item_id; })
+      .reduce(function(s, c) { return s + parseFloat(c.valor_usd_kg || 0); }, 0);
+    var pf     = parseFloat(item.costo_lote_kg || 0) + sum;
+    var factor = factorPresentacion(item.presentacion, item.cantidad_unidades);
+    var pu     = pf * factor;
+    var cant   = parseFloat(item.cantidad_unidades || 0);
+    grand += item.presentacion === 'Granel' ? pu : pu * cant;
+  });
+
+  document.getElementById('cot-summary').innerHTML =
+    '<strong>Resumen de cotización</strong>' +
+    '<div class="form-grid mt-1">' +
+      '<div><label>Ítems</label><strong>' + items.length + '</strong></div>' +
+      '<div><label>Total general (USD)</label>' +
+        '<strong style="font-size:1.1rem;color:var(--green)">$' + grand.toFixed(2) + '</strong></div>' +
+    '</div>';
+}
+
+function renderSummaryFromState() {
+  if (!cotState) return;
+  var grand = 0;
+  cotState.items.forEach(function(item) {
+    var inputs = document.querySelectorAll('[data-item-id="' + item.cot_item_id + '"]');
+    var sumaCostosKg = 0;
+    inputs.forEach(function(i) { sumaCostosKg += parseFloat(i.value || 0); });
+    var pf     = parseFloat(item.costo_lote_kg || 0) + sumaCostosKg;
+    var factor = factorPresentacion(item.presentacion, item.cantidad_unidades);
+    var pu     = pf * factor;
+    var cant   = parseFloat(item.cantidad_unidades || 0);
+    grand += item.presentacion === 'Granel' ? pu : pu * cant;
+  });
+
+  var el = document.getElementById('cot-summary');
+  if (el) el.innerHTML =
+    '<strong>Resumen de cotización</strong>' +
+    '<div class="form-grid mt-1">' +
+      '<div><label>Ítems</label><strong>' + cotState.items.length + '</strong></div>' +
+      '<div><label>Total general (USD)</label>' +
+        '<strong style="font-size:1.1rem;color:var(--green)">$' + grand.toFixed(2) + '</strong></div>' +
+    '</div>';
+}
+
+
+ + precioUnitario.toFixed(4) + '</strong></div>' +
         '<div><label>Total (USD)</label>' +
-          '<strong id="tot-' + item.cot_item_id + '">$' + totalUsd.toFixed(2) + '</strong></div>' +
+          '<strong id="tot-' + item.cot_item_id + '">
+
+function onCostoChange(input) {
+  var costoId      = input.dataset.costoId;
+  var itemId       = input.dataset.itemId;
+  var cantidad     = parseFloat(input.dataset.cantidad || 0);
+  var presentacion = input.dataset.presentacion;
+  var loteCosto    = parseFloat(input.dataset.loteCosto || 0);
+  var newVal       = parseFloat(input.value || 0);
+
+  pendingEdits[costoId] = { costo_id: costoId, valor_usd_kg: newVal, cot_item_id: itemId };
+
+  var factor   = factorPresentacion(presentacion, cantidad);
+  var subUn    = newVal * factor;
+  var subTotal = presentacion === 'Granel' ? subUn : subUn * cantidad;
+  document.getElementById('sub-' + costoId).textContent = '$' + subTotal.toFixed(2);
+
+  recalcItemUI(itemId, loteCosto, cantidad, presentacion);
+  renderSummaryFromState();
+}
+
+function recalcItemUI(itemId, loteCosto, cantidad, presentacion) {
+  var inputs = document.querySelectorAll('[data-item-id="' + itemId + '"]');
+  var sumaCostosKg = 0;
+  inputs.forEach(function(i) { sumaCostosKg += parseFloat(i.value || 0); });
+
+  var precioFinalKg  = loteCosto + sumaCostosKg;
+  var factor         = factorPresentacion(presentacion, cantidad);
+  var precioUnitario = precioFinalKg * factor;
+  var totalUsd       = presentacion === 'Granel' ? precioUnitario : precioUnitario * cantidad;
+
+  var pfEl  = document.getElementById('pf-'  + itemId);
+  var puEl  = document.getElementById('pu-'  + itemId);
+  var totEl = document.getElementById('tot-' + itemId);
+  if (pfEl)  pfEl.textContent  = '$' + precioFinalKg.toFixed(4);
+  if (puEl)  puEl.textContent  = '$' + precioUnitario.toFixed(4);
+  if (totEl) totEl.textContent = '$' + totalUsd.toFixed(2);
+}
+
+function renderSummary(items, costos) {
+  var grand = 0;
+  items.forEach(function(item) {
+    var sum = costos
+      .filter(function(c) { return c.cot_item_id === item.cot_item_id; })
+      .reduce(function(s, c) { return s + parseFloat(c.valor_usd_kg || 0); }, 0);
+    var pf     = parseFloat(item.costo_lote_kg || 0) + sum;
+    var factor = factorPresentacion(item.presentacion, item.cantidad_unidades);
+    var pu     = pf * factor;
+    var cant   = parseFloat(item.cantidad_unidades || 0);
+    grand += item.presentacion === 'Granel' ? pu : pu * cant;
+  });
+
+  document.getElementById('cot-summary').innerHTML =
+    '<strong>Resumen de cotización</strong>' +
+    '<div class="form-grid mt-1">' +
+      '<div><label>Ítems</label><strong>' + items.length + '</strong></div>' +
+      '<div><label>Total general (USD)</label>' +
+        '<strong style="font-size:1.1rem;color:var(--green)">$' + grand.toFixed(2) + '</strong></div>' +
+    '</div>';
+}
+
+function renderSummaryFromState() {
+  if (!cotState) return;
+  var grand = 0;
+  cotState.items.forEach(function(item) {
+    var inputs = document.querySelectorAll('[data-item-id="' + item.cot_item_id + '"]');
+    var sumaCostosKg = 0;
+    inputs.forEach(function(i) { sumaCostosKg += parseFloat(i.value || 0); });
+    var pf     = parseFloat(item.costo_lote_kg || 0) + sumaCostosKg;
+    var factor = factorPresentacion(item.presentacion, item.cantidad_unidades);
+    var pu     = pf * factor;
+    var cant   = parseFloat(item.cantidad_unidades || 0);
+    grand += item.presentacion === 'Granel' ? pu : pu * cant;
+  });
+
+  var el = document.getElementById('cot-summary');
+  if (el) el.innerHTML =
+    '<strong>Resumen de cotización</strong>' +
+    '<div class="form-grid mt-1">' +
+      '<div><label>Ítems</label><strong>' + cotState.items.length + '</strong></div>' +
+      '<div><label>Total general (USD)</label>' +
+        '<strong style="font-size:1.1rem;color:var(--green)">$' + grand.toFixed(2) + '</strong></div>' +
+    '</div>';
+}
+
+
+ + totalUsd.toFixed(2) + '</strong></div>' +
       '</div>' +
+      selectorLote +
       '<div class="tbl-wrap">' +
         '<table>' +
           '<thead><tr>' +
             '<th>Costo</th><th>Tipo</th><th>USD/kg</th><th>Factor</th><th>Subtotal</th>' +
           '</tr></thead>' +
-          '<tbody>' +
-            itemCostos.map(function(c) { return renderCostoRow(c, item); }).join('') +
-          '</tbody>' +
+          '<tbody>' + costoRows + '</tbody>' +
         '</table>' +
       '</div>' +
-      '<p class="text-muted mt-1">cot_item_id: <code>' + item.cot_item_id + '</code></p>';
+      (!soloLectura
+        ? '<p class="text-muted mt-1">cot_item_id: <code>' + item.cot_item_id + '</code></p>'
+        : '');
 
     section.appendChild(card);
   });
@@ -211,24 +687,200 @@ function renderCotizacion(data) {
   renderSummary(items, costos);
 }
 
-function renderCostoRow(c, item) {
+function renderCostoRow(c, item, soloLectura) {
   var factor = factorPresentacion(item.presentacion, item.cantidad_unidades);
   var val    = parseFloat(c.valor_usd_kg || 0);
   var cant   = parseFloat(item.cantidad_unidades || 0);
   var sub    = item.presentacion === 'Granel' ? val * factor : val * factor * cant;
 
+  var inputCell = soloLectura
+    ? '<td>
+
+function onCostoChange(input) {
+  var costoId      = input.dataset.costoId;
+  var itemId       = input.dataset.itemId;
+  var cantidad     = parseFloat(input.dataset.cantidad || 0);
+  var presentacion = input.dataset.presentacion;
+  var loteCosto    = parseFloat(input.dataset.loteCosto || 0);
+  var newVal       = parseFloat(input.value || 0);
+
+  pendingEdits[costoId] = { costo_id: costoId, valor_usd_kg: newVal, cot_item_id: itemId };
+
+  var factor   = factorPresentacion(presentacion, cantidad);
+  var subUn    = newVal * factor;
+  var subTotal = presentacion === 'Granel' ? subUn : subUn * cantidad;
+  document.getElementById('sub-' + costoId).textContent = '$' + subTotal.toFixed(2);
+
+  recalcItemUI(itemId, loteCosto, cantidad, presentacion);
+  renderSummaryFromState();
+}
+
+function recalcItemUI(itemId, loteCosto, cantidad, presentacion) {
+  var inputs = document.querySelectorAll('[data-item-id="' + itemId + '"]');
+  var sumaCostosKg = 0;
+  inputs.forEach(function(i) { sumaCostosKg += parseFloat(i.value || 0); });
+
+  var precioFinalKg  = loteCosto + sumaCostosKg;
+  var factor         = factorPresentacion(presentacion, cantidad);
+  var precioUnitario = precioFinalKg * factor;
+  var totalUsd       = presentacion === 'Granel' ? precioUnitario : precioUnitario * cantidad;
+
+  var pfEl  = document.getElementById('pf-'  + itemId);
+  var puEl  = document.getElementById('pu-'  + itemId);
+  var totEl = document.getElementById('tot-' + itemId);
+  if (pfEl)  pfEl.textContent  = '$' + precioFinalKg.toFixed(4);
+  if (puEl)  puEl.textContent  = '$' + precioUnitario.toFixed(4);
+  if (totEl) totEl.textContent = '$' + totalUsd.toFixed(2);
+}
+
+function renderSummary(items, costos) {
+  var grand = 0;
+  items.forEach(function(item) {
+    var sum = costos
+      .filter(function(c) { return c.cot_item_id === item.cot_item_id; })
+      .reduce(function(s, c) { return s + parseFloat(c.valor_usd_kg || 0); }, 0);
+    var pf     = parseFloat(item.costo_lote_kg || 0) + sum;
+    var factor = factorPresentacion(item.presentacion, item.cantidad_unidades);
+    var pu     = pf * factor;
+    var cant   = parseFloat(item.cantidad_unidades || 0);
+    grand += item.presentacion === 'Granel' ? pu : pu * cant;
+  });
+
+  document.getElementById('cot-summary').innerHTML =
+    '<strong>Resumen de cotización</strong>' +
+    '<div class="form-grid mt-1">' +
+      '<div><label>Ítems</label><strong>' + items.length + '</strong></div>' +
+      '<div><label>Total general (USD)</label>' +
+        '<strong style="font-size:1.1rem;color:var(--green)">$' + grand.toFixed(2) + '</strong></div>' +
+    '</div>';
+}
+
+function renderSummaryFromState() {
+  if (!cotState) return;
+  var grand = 0;
+  cotState.items.forEach(function(item) {
+    var inputs = document.querySelectorAll('[data-item-id="' + item.cot_item_id + '"]');
+    var sumaCostosKg = 0;
+    inputs.forEach(function(i) { sumaCostosKg += parseFloat(i.value || 0); });
+    var pf     = parseFloat(item.costo_lote_kg || 0) + sumaCostosKg;
+    var factor = factorPresentacion(item.presentacion, item.cantidad_unidades);
+    var pu     = pf * factor;
+    var cant   = parseFloat(item.cantidad_unidades || 0);
+    grand += item.presentacion === 'Granel' ? pu : pu * cant;
+  });
+
+  var el = document.getElementById('cot-summary');
+  if (el) el.innerHTML =
+    '<strong>Resumen de cotización</strong>' +
+    '<div class="form-grid mt-1">' +
+      '<div><label>Ítems</label><strong>' + cotState.items.length + '</strong></div>' +
+      '<div><label>Total general (USD)</label>' +
+        '<strong style="font-size:1.1rem;color:var(--green)">$' + grand.toFixed(2) + '</strong></div>' +
+    '</div>';
+}
+
+
+ + val.toFixed(4) + '</td>'
+    : '<td><input type="number" step="0.0001" value="' + val.toFixed(4) + '" ' +
+        'data-costo-id="'    + c.costo_id           + '" ' +
+        'data-item-id="'     + item.cot_item_id      + '" ' +
+        'data-cantidad="'    + item.cantidad_unidades + '" ' +
+        'data-presentacion="'+ item.presentacion      + '" ' +
+        'data-lote-costo="'  + item.costo_lote_kg     + '" ' +
+        'onchange="onCostoChange(this)" style="width:100px" /></td>';
+
   return '<tr id="row-' + c.costo_id + '">' +
     '<td>' + c.nombre + '</td>' +
     '<td><span class="tag tag-blue">' + c.tipo + '</span></td>' +
-    '<td><input type="number" step="0.0001" value="' + val.toFixed(4) + '" ' +
-      'data-costo-id="'    + c.costo_id           + '" ' +
-      'data-item-id="'     + item.cot_item_id      + '" ' +
-      'data-cantidad="'    + item.cantidad_unidades + '" ' +
-      'data-presentacion="'+ item.presentacion      + '" ' +
-      'data-lote-costo="'  + item.costo_lote_kg     + '" ' +
-      'onchange="onCostoChange(this)" style="width:100px" /></td>' +
+    inputCell +
     '<td class="text-muted" style="font-size:.75rem">× ' + factor.toFixed(4) + ' kg</td>' +
-    '<td id="sub-' + c.costo_id + '">$' + sub.toFixed(2) + '</td>' +
+    '<td id="sub-' + c.costo_id + '">
+
+function onCostoChange(input) {
+  var costoId      = input.dataset.costoId;
+  var itemId       = input.dataset.itemId;
+  var cantidad     = parseFloat(input.dataset.cantidad || 0);
+  var presentacion = input.dataset.presentacion;
+  var loteCosto    = parseFloat(input.dataset.loteCosto || 0);
+  var newVal       = parseFloat(input.value || 0);
+
+  pendingEdits[costoId] = { costo_id: costoId, valor_usd_kg: newVal, cot_item_id: itemId };
+
+  var factor   = factorPresentacion(presentacion, cantidad);
+  var subUn    = newVal * factor;
+  var subTotal = presentacion === 'Granel' ? subUn : subUn * cantidad;
+  document.getElementById('sub-' + costoId).textContent = '$' + subTotal.toFixed(2);
+
+  recalcItemUI(itemId, loteCosto, cantidad, presentacion);
+  renderSummaryFromState();
+}
+
+function recalcItemUI(itemId, loteCosto, cantidad, presentacion) {
+  var inputs = document.querySelectorAll('[data-item-id="' + itemId + '"]');
+  var sumaCostosKg = 0;
+  inputs.forEach(function(i) { sumaCostosKg += parseFloat(i.value || 0); });
+
+  var precioFinalKg  = loteCosto + sumaCostosKg;
+  var factor         = factorPresentacion(presentacion, cantidad);
+  var precioUnitario = precioFinalKg * factor;
+  var totalUsd       = presentacion === 'Granel' ? precioUnitario : precioUnitario * cantidad;
+
+  var pfEl  = document.getElementById('pf-'  + itemId);
+  var puEl  = document.getElementById('pu-'  + itemId);
+  var totEl = document.getElementById('tot-' + itemId);
+  if (pfEl)  pfEl.textContent  = '$' + precioFinalKg.toFixed(4);
+  if (puEl)  puEl.textContent  = '$' + precioUnitario.toFixed(4);
+  if (totEl) totEl.textContent = '$' + totalUsd.toFixed(2);
+}
+
+function renderSummary(items, costos) {
+  var grand = 0;
+  items.forEach(function(item) {
+    var sum = costos
+      .filter(function(c) { return c.cot_item_id === item.cot_item_id; })
+      .reduce(function(s, c) { return s + parseFloat(c.valor_usd_kg || 0); }, 0);
+    var pf     = parseFloat(item.costo_lote_kg || 0) + sum;
+    var factor = factorPresentacion(item.presentacion, item.cantidad_unidades);
+    var pu     = pf * factor;
+    var cant   = parseFloat(item.cantidad_unidades || 0);
+    grand += item.presentacion === 'Granel' ? pu : pu * cant;
+  });
+
+  document.getElementById('cot-summary').innerHTML =
+    '<strong>Resumen de cotización</strong>' +
+    '<div class="form-grid mt-1">' +
+      '<div><label>Ítems</label><strong>' + items.length + '</strong></div>' +
+      '<div><label>Total general (USD)</label>' +
+        '<strong style="font-size:1.1rem;color:var(--green)">$' + grand.toFixed(2) + '</strong></div>' +
+    '</div>';
+}
+
+function renderSummaryFromState() {
+  if (!cotState) return;
+  var grand = 0;
+  cotState.items.forEach(function(item) {
+    var inputs = document.querySelectorAll('[data-item-id="' + item.cot_item_id + '"]');
+    var sumaCostosKg = 0;
+    inputs.forEach(function(i) { sumaCostosKg += parseFloat(i.value || 0); });
+    var pf     = parseFloat(item.costo_lote_kg || 0) + sumaCostosKg;
+    var factor = factorPresentacion(item.presentacion, item.cantidad_unidades);
+    var pu     = pf * factor;
+    var cant   = parseFloat(item.cantidad_unidades || 0);
+    grand += item.presentacion === 'Granel' ? pu : pu * cant;
+  });
+
+  var el = document.getElementById('cot-summary');
+  if (el) el.innerHTML =
+    '<strong>Resumen de cotización</strong>' +
+    '<div class="form-grid mt-1">' +
+      '<div><label>Ítems</label><strong>' + cotState.items.length + '</strong></div>' +
+      '<div><label>Total general (USD)</label>' +
+        '<strong style="font-size:1.1rem;color:var(--green)">$' + grand.toFixed(2) + '</strong></div>' +
+    '</div>';
+}
+
+
+ + sub.toFixed(2) + '</td>' +
     '</tr>';
 }
 
