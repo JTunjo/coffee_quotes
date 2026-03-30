@@ -175,7 +175,7 @@
 
       <div id="cot-items-section"></div>
 
-      <div class="card">
+      <div id="seccion-costo-manual" class="card">
         <div class="card-title">➕ Agregar Costo Manual</div>
         <div class="form-grid">
           <div><label>Nombre del costo</label>
@@ -195,7 +195,7 @@
         <button class="btn btn-ghost mt-1 btn-sm" onclick="addManualCost()">+ Agregar a lista</button>
       </div>
 
-      <div class="flex gap-1" style="justify-content:flex-end;margin-top:.5rem">
+      <div id="botones-cotizacion" class="flex gap-1" style="justify-content:flex-end;margin-top:.5rem">
         <button class="btn btn-ghost" onclick="resetEditor()">↺ Descartar</button>
         <button id="btn-imprimir" class="btn btn-ghost" onclick="window.print()" disabled
           title="Resuelve los ítems sin disponibilidad para imprimir">🖨 Imprimir</button>
@@ -221,21 +221,10 @@
   </div>
 </div>
 
-<!-- ── Modal selección de lote ───────────────────── -->
-<div id="modal-lote">
-  <div class="modal-box">
-    <h3 id="modal-lote-title" style="color:var(--accent);margin-bottom:1rem;font-size:1rem"></h3>
-    <p style="font-size:.82rem;color:var(--muted);margin-bottom:.75rem">
-      Se encontraron varios lotes disponibles en la ventana ±15 días. Selecciona uno:
-    </p>
-    <div id="modal-lote-body"></div>
-  </div>
-</div>
-
 <!-- ── Scripts (orden importante) ───────────────── -->
-<script src="js_api.js"></script>
-<script src="js_ui.js"></script>
-<script src="js_app.js"></script>
+<script src="api.js"></script>
+<script src="ui.js"></script>
+<script src="app.js"></script>
 
 </body>
 </html>
