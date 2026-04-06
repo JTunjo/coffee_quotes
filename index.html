@@ -128,8 +128,7 @@
             <option value="EUR">EUR — Euro</option>
             <option value="COP">COP — Peso colombiano</option>
           </select>
-        </div>
-      </div>
+        </div>      </div>
     </div>
 
     <div class="card">
@@ -188,7 +187,7 @@
           <div><label>Nombre del costo</label>
             <input id="new-costo-nombre" placeholder="Ej. Seguro exportación" /></div>
           <div><label>Item (cot_item_id)</label>
-            <input id="new-costo-item" placeholder="ID del item" /></div>
+            <input id="new-costo-item" placeholder="Opcional — dejar vacío si es global" /></div>
           <div><label>Valor/kg</label>
             <input id="new-costo-valor" type="number" step="0.01" placeholder="0.00" /></div>
           <div><label>Moneda</label>
@@ -207,6 +206,21 @@
           </div>
         </div>
         <button class="btn btn-ghost mt-1 btn-sm" onclick="addManualCost()">+ Agregar a lista</button>
+
+        <!-- Lista de costos pendientes -->
+        <div id="pending-costos-wrap" class="hidden" style="margin-top:1rem">
+          <div style="font-size:.82rem;font-weight:700;color:var(--accent2);margin-bottom:.4rem">
+            ⏳ Pendientes de guardar
+          </div>
+          <div class="tbl-wrap">
+            <table>
+              <thead><tr>
+                <th>Nombre</th><th>Tipo</th><th>Moneda</th><th>Valor/kg</th><th>Item</th><th></th>
+              </tr></thead>
+              <tbody id="pending-costos-body"></tbody>
+            </table>
+          </div>
+        </div>
       </div>
 
       <div id="botones-cotizacion" class="flex gap-1" style="justify-content:flex-end;margin-top:.5rem">
