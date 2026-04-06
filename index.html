@@ -1,5 +1,4 @@
 <!DOCTYPE html>
-  /* ÚLTIMA VERSIÓN ESTABLE */
 <html lang="es">
 <head>
 <meta charset="UTF-8" />
@@ -183,8 +182,15 @@
             <input id="new-costo-nombre" placeholder="Ej. Seguro exportación" /></div>
           <div><label>Item (cot_item_id)</label>
             <input id="new-costo-item" placeholder="ID del item" /></div>
-          <div><label>Valor (USD/kg)</label>
+          <div><label>Valor/kg</label>
             <input id="new-costo-valor" type="number" step="0.01" placeholder="0.00" /></div>
+          <div><label>Moneda</label>
+            <select id="new-costo-moneda">
+              <option value="COP">COP</option>
+              <option value="USD">USD</option>
+              <option value="EUR">EUR</option>
+            </select>
+          </div>
           <div><label>Tipo</label>
             <select id="new-costo-tipo">
               <option value="manual">Manual</option>
@@ -223,9 +229,9 @@
 </div>
 
 <!-- ── Scripts (orden importante) ───────────────── -->
-<script src="js_api.js"></script>
-<script src="js_ui.js"></script>
-<script src="js_app.js"></script>
+<script src="api.js"></script>
+<script src="ui.js"></script>
+<script src="app.js"></script>
 
 </body>
 </html>
