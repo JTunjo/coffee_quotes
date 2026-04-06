@@ -375,13 +375,27 @@ function renderSummary(items, costos) {
   var itemRows = '';
 
   items.forEach(function(item) {
-    var costoItemCOP = costos
-      .filter(function(c) { return c.cot_item_id === item.cot_item_id; })
-      .reduce(function(s, c) {
-        return s + aCOP(parseFloat(c.valor_kg || 0), c.moneda, tUSD, tEUR);
-      }, 0);
+    var loteCosto = parseFloat(item.costo_lote_kg || 0);
 
-    var pfKgCOP  = parseFloat(item.costo_lote_kg || 0) + costoItemCOP;
+    // Para cada ítem: priorizar valores editados en DOM sobre cotState
+    var inputs = document.querySelectorAll('[data-item-id="' + item.cot_item_id + '"]');
+    var sumaCOP = 0;
+
+    if (inputs.length > 0) {
+      // Hay inputs en el DOM — leer valores actuales (pueden tener ediciones pendientes)
+      inputs.forEach(function(inp) {
+        var mon = inp.dataset.moneda || 'COP';
+        sumaCOP += aCOP(parseFloat(inp.value || 0), mon, tUSD, tEUR);
+      });
+    } else {
+      // No hay inputs (solo lectura) — usar costos de cotState
+      var itemCostos = costos.filter(function(c) { return c.cot_item_id === item.cot_item_id; });
+      itemCostos.forEach(function(c) {
+        sumaCOP += aCOP(parseFloat(c.valor_kg || 0), c.moneda, tUSD, tEUR);
+      });
+    }
+
+    var pfKgCOP  = loteCosto + sumaCOP;
     var factor   = factorPresentacion(item.presentacion, item.cantidad_unidades);
     var puCOP    = pfKgCOP * factor;
     var cant     = parseFloat(item.cantidad_unidades || 0);
