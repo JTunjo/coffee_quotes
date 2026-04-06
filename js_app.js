@@ -296,12 +296,14 @@ async function saveCotizacion() {
   toast('✅ Cotización guardada');
   pendingEdits = {};
   pendingNew   = [];
+  renderPendingCostos();
   await loadCotizacion(currentCotId);
 }
 
 function resetEditor() {
   pendingEdits = {};
   pendingNew   = [];
+  renderPendingCostos();
   if (currentCotId) loadCotizacion(currentCotId);
 }
 
@@ -314,7 +316,7 @@ function addManualCost() {
   var moneda = document.getElementById('new-costo-moneda').value;
   var tipo   = document.getElementById('new-costo-tipo').value;
 
-  if (!nombre || !itemId) return toast('⚠️ Nombre e ID de item son requeridos');
+  if (!nombre) return toast('⚠️ El nombre del costo es requerido');
 
   pendingNew.push({
     nombre:      nombre,
@@ -323,11 +325,47 @@ function addManualCost() {
     valor_kg:    valor,
     cot_item_id: itemId,
   });
-  toast('✅ Costo "' + nombre + '" (' + moneda + ') agregado');
 
+  // Limpiar campos
   document.getElementById('new-costo-nombre').value = '';
   document.getElementById('new-costo-item').value   = '';
   document.getElementById('new-costo-valor').value  = '';
+
+  renderPendingCostos();
+  toast('✅ Costo "' + nombre + '" agregado a la lista');
+}
+
+function removePendingCosto(idx) {
+  pendingNew.splice(idx, 1);
+  renderPendingCostos();
+}
+
+function renderPendingCostos() {
+  var wrap = document.getElementById('pending-costos-wrap');
+  var body = document.getElementById('pending-costos-body');
+  if (!wrap || !body) return;
+
+  if (!pendingNew.length) {
+    wrap.classList.add('hidden');
+    body.innerHTML = '';
+    return;
+  }
+
+  wrap.classList.remove('hidden');
+  var rows = '';
+  for (var i = 0; i < pendingNew.length; i++) {
+    var c = pendingNew[i];
+    rows +=
+      '<tr>' +
+        '<td>' + c.nombre + '</td>' +
+        '<td><span class="tag tag-blue">' + c.tipo + '</span></td>' +
+        '<td><span class="tag tag-yellow">' + c.moneda + '</span></td>' +
+        '<td>' + (c.valor_kg || 0).toLocaleString('es-CO') + '</td>' +
+        '<td style="font-size:.75rem;color:var(--muted)">' + (c.cot_item_id || 'Global') + '</td>' +
+        '<td><button class="btn btn-danger btn-sm" onclick="removePendingCosto(' + i + ')">✕</button></td>' +
+      '</tr>';
+  }
+  body.innerHTML = rows;
 }
 
 // ══════════════════════════════════════════════════════════
