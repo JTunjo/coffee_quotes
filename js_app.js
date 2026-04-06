@@ -1,28 +1,24 @@
 // ============================================================
-//  app.js — Lógica de negocio: RFQ, cotización, costos
+//  app.js — Lógica de negocio
 //  Depende de: api.js, ui.js
 // ============================================================
 
-const USUARIO = 'asesor@cafe.com'; // mock; reemplazar con auth real
+const USUARIO = 'asesor@cafe.com';
 
-// ── Estado de tasas (en memoria mientras edita) ───────────
-var tasaUSD = 0;
-var tasaEUR = 0;
-
-
+// ── Estado global ─────────────────────────────────────────
 var rfqItemCount = 0;
 var currentCotId = null;
 var cotState     = null;
 var pendingEdits = {};
 var pendingNew   = [];
 var variedades   = [];
+var tasaUSD      = 0;
+var tasaEUR      = 0;
 
 // ══════════════════════════════════════════════════════════
 //  RFQ
 // ══════════════════════════════════════════════════════════
 
-
-// Construye las <option> del select de variedad
 function buildVariedadOptions() {
   if (!variedades.length) {
     return '<option value="">— Sin variedades cargadas —</option>';
@@ -33,7 +29,6 @@ function buildVariedadOptions() {
     }).join('');
 }
 
-// Refresca todos los selects de variedad activos en el formulario
 function refreshVariedadSelects() {
   document.querySelectorAll('select[data-field="variedad"]').forEach(function(sel) {
     var current = sel.value;
@@ -50,9 +45,7 @@ function addRfqItem() {
   div.id = id;
   div.innerHTML =
     '<div><label>Variedad</label>' +
-      '<select data-field="variedad">' +
-        buildVariedadOptions() +
-      '</select></div>' +
+      '<select data-field="variedad">' + buildVariedadOptions() + '</select></div>' +
     '<div><label>Origen</label>' +
       '<input placeholder="Ej. Huila" data-field="origen" /></div>' +
     '<div><label>Destino</label>' +
@@ -80,8 +73,7 @@ function addRfqItem() {
       '<input placeholder="auto" data-field="lote_id" /></div>' +
     '<div style="padding-top:1.2rem">' +
       '<button class="btn btn-danger btn-sm" ' +
-      'onclick="document.getElementById(\'' + id + '\').remove()">✕</button></div>';
-
+        'onclick="document.getElementById(\'' + id + '\').remove()">✕</button></div>';
   document.getElementById('rfq-items-container').appendChild(div);
 }
 
@@ -101,16 +93,12 @@ function validateRfqItems(items) {
   var errores = [];
   items.forEach(function(item, i) {
     var n = i + 1;
-    if (!item.variedad)
-      errores.push('Ítem ' + n + ': variedad requerida');
+    if (!item.variedad)           errores.push('Ítem ' + n + ': variedad requerida');
     if (!item.cantidad_unidades || item.cantidad_unidades <= 0)
-      errores.push('Ítem ' + n + ': cantidad requerida');
-    if (!item.presentacion)
-      errores.push('Ítem ' + n + ': presentación requerida');
-    if (!item.fecha_requerida)
-      errores.push('Ítem ' + n + ': fecha requerida');
-    if (!item.destino)
-      errores.push('Ítem ' + n + ': destino requerido');
+                                  errores.push('Ítem ' + n + ': cantidad requerida');
+    if (!item.presentacion)       errores.push('Ítem ' + n + ': presentación requerida');
+    if (!item.fecha_requerida)    errores.push('Ítem ' + n + ': fecha requerida');
+    if (!item.destino)            errores.push('Ítem ' + n + ': destino requerido');
   });
   return errores;
 }
@@ -119,34 +107,40 @@ function resetRfqForm() {
   document.getElementById('rfq-cliente').value = '';
   document.getElementById('rfq-asesor').value  = '';
   document.getElementById('rfq-fecha').value   = new Date().toISOString().slice(0, 10);
+  document.getElementById('rfq-moneda').value  = 'USD';
   document.getElementById('rfq-items-container').innerHTML = '';
   rfqItemCount = 0;
   addRfqItem();
 }
 
 async function submitRFQ() {
-  var cliente  = document.getElementById('rfq-cliente').value.trim();
-  var asesor   = document.getElementById('rfq-asesor').value.trim();
-  var fecha    = document.getElementById('rfq-fecha').value;
-  var moneda   = document.getElementById('rfq-moneda').value;
-  var items    = collectRfqItems();
+  var cliente = document.getElementById('rfq-cliente').value.trim();
+  var asesor  = document.getElementById('rfq-asesor').value.trim();
+  var fecha   = document.getElementById('rfq-fecha').value;
+  var moneda  = document.getElementById('rfq-moneda').value;
+  var items   = collectRfqItems();
 
   if (!cliente || !asesor) return toast('⚠️ Completa cliente y asesor');
   if (!items.length)        return toast('⚠️ Agrega al menos un ítem');
 
   var errores = validateRfqItems(items);
   if (errores.length) {
-    toast('⚠️ ' + errores[0] +
-      (errores.length > 1 ? ' (+' + (errores.length - 1) + ' más)' : ''));
+    toast('⚠️ ' + errores[0] + (errores.length > 1 ? ' (+' + (errores.length - 1) + ' más)' : ''));
     return;
   }
 
   toast('⏳ Creando RFQ...');
   try {
-    var res = await apiPost({ action: 'crearRFQ', cliente: cliente,
-                              asesor: asesor, fecha: fecha, items: items });
+    var res = await apiPost({
+      action:            'crearRFQ',
+      cliente:           cliente,
+      asesor:            asesor,
+      fecha:             fecha,
+      moneda_solicitada: moneda,
+      items:             items,
+    });
 
-    // Siempre limpiar el formulario, independiente del resultado
+    var cotId = res && res.cotizacion_id ? res.cotizacion_id : null;
     resetRfqForm();
 
     if (!res || !res.ok) {
@@ -154,8 +148,6 @@ async function submitRFQ() {
       return;
     }
 
-    // Éxito: guardar cotId antes de cualquier otra operación
-    var cotId = res.cotizacion_id;
     showPopupSuccess();
     setTimeout(function() {
       document.getElementById('cot-search-id').value = cotId;
@@ -165,7 +157,7 @@ async function submitRFQ() {
 
   } catch(err) {
     resetRfqForm();
-    showPopupError('No se pudo conectar con el servidor.<br>Verifica tu conexión e inténtalo de nuevo.');
+    showPopupError('No se pudo conectar con el servidor.');
   }
 }
 
@@ -176,14 +168,11 @@ async function submitRFQ() {
 async function loadRFQList() {
   var tbody = document.getElementById('rfq-list-body');
   tbody.innerHTML = '<tr><td colspan="6">Cargando...</td></tr>';
-
   var res = await apiGet({ action: 'listRFQs' });
   if (!res.ok || !res.rfqs.length) {
-    tbody.innerHTML =
-      '<tr><td colspan="6" style="color:var(--muted)">Sin RFQs aún.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" style="color:var(--muted)">Sin RFQs aún.</td></tr>';
     return;
   }
-
   tbody.innerHTML = res.rfqs.map(function(r) {
     return '<tr>' +
       '<td><code style="font-size:.75rem">' + r.rfq_id.slice(0, 8) + '…</code></td>' +
@@ -215,38 +204,34 @@ async function loadCotizacion(cotId) {
   var res = await apiGet({ action: 'getCotizacion', cotizacionId: cotId });
   if (!res.ok) return toast('❌ ' + res.error);
 
-  currentCotId = cotId;
-  cotState     = res;
+  currentCotId      = cotId;
+  cotState          = res;
   cotState.rfqItems = res.rfqItems || [];
-  tasaUSD      = parseFloat(res.cotizacion.tasa_usd || 0);
-  tasaEUR      = parseFloat(res.cotizacion.tasa_eur || 0);
-  pendingEdits = {};
-  pendingNew   = [];
+  tasaUSD           = parseFloat(res.cotizacion.tasa_usd || 0);
+  tasaEUR           = parseFloat(res.cotizacion.tasa_eur || 0);
+  pendingEdits      = {};
+  pendingNew        = [];
 
-  // ── Modo solo lectura si está Enviado ─────────────────
   var enviado = (res.cotizacion.estado || '').toLowerCase() === 'enviado';
   renderCotizacion(res, enviado);
   document.getElementById('cot-editor').classList.remove('hidden');
-
-  // Controles de edición: ocultar si está enviado
   document.getElementById('seccion-costo-manual').classList.toggle('hidden', enviado);
   document.getElementById('botones-cotizacion').classList.toggle('hidden', enviado);
-  document.getElementById('btn-imprimir').disabled = false; // enviado siempre puede imprimir
+  document.getElementById('btn-imprimir').disabled = false;
 
   if (enviado) {
     toast('✅ Cotización enviada — solo lectura');
     return;
   }
 
-  // ── Verificar disponibilidad ───────────────────────────
   toast('⏳ Verificando disponibilidad...');
   var vRes = await apiGet({ action: 'verificarDisponibilidad', cotizacionId: cotId });
   if (!vRes.ok) { toast('❌ Error al verificar disponibilidad'); return; }
 
-  // Recargar cotización con lotes ya asignados por la verificación
   var res2 = await apiGet({ action: 'getCotizacion', cotizacionId: cotId });
   if (res2.ok) {
-    cotState = res2;
+    cotState          = res2;
+    cotState.rfqItems = res2.rfqItems || [];
     renderCotizacion(res2, false, vRes.resultados);
   }
 
@@ -259,62 +244,11 @@ async function loadCotizacion(cotId) {
   toast('✅ Cotización lista');
 }
 
-// Llamado al cambiar tasa en el encabezado — recalcula resumen en tiempo real
+// Llamado al cambiar tasa en el encabezado
 function onTasaChange() {
   tasaUSD = parseFloat(document.getElementById('tasa-usd').value || 0);
   tasaEUR = parseFloat(document.getElementById('tasa-eur').value || 0);
   if (cotState) renderSummaryFromState();
-}
-
-// Guarda tasas en Sheets (se llama al hacer guardar cotización)
-async function guardarTasasEnSheets() {
-  if (!currentCotId || (!tasaUSD && !tasaEUR)) return;
-  await apiPost({
-    action:        'guardarTasas',
-    cotizacion_id: currentCotId,
-    tasa_usd:      tasaUSD,
-    tasa_eur:      tasaEUR,
-  });
-}
-
-
-  renderDisponibilidadBanner(vRes.resultados);
-
-  var btnImpr      = document.getElementById('btn-imprimir');
-  btnImpr.disabled = vRes.hay_incompletos;
-  btnImpr.title    = vRes.hay_incompletos
-    ? 'Resuelve los ítems sin disponibilidad para imprimir'
-    : 'Imprimir cotización';
-
-  var pendientes = vRes.resultados.filter(function(r) {
-    return r.estado === 'seleccion_requerida';
-  });
-  for (var i = 0; i < pendientes.length; i++) {
-    await mostrarModalSeleccionLote(pendientes[i], cotId);
-  }
-
-  if (pendientes.length) {
-    var res2 = await apiGet({ action: 'getCotizacion', cotizacionId: cotId });
-    if (res2.ok) { cotState = res2; renderCotizacion(res2); }
-  }
-}
-
-// ── Costos manuales ───────────────────────────────────────
-
-function addManualCost() {
-  var nombre = document.getElementById('new-costo-nombre').value.trim();
-  var itemId = document.getElementById('new-costo-item').value.trim();
-  var valor  = parseFloat(document.getElementById('new-costo-valor').value || 0);
-  var tipo   = document.getElementById('new-costo-tipo').value;
-
-  if (!nombre || !itemId) return toast('⚠️ Nombre e ID de item son requeridos');
-
-  pendingNew.push({ nombre: nombre, tipo: tipo, valor_usd_kg: valor, cot_item_id: itemId });
-  toast('✅ Costo "' + nombre + '" agregado (pendiente de guardar)');
-
-  document.getElementById('new-costo-nombre').value = '';
-  document.getElementById('new-costo-item').value   = '';
-  document.getElementById('new-costo-valor').value  = '';
 }
 
 async function saveCotizacion() {
@@ -330,18 +264,21 @@ async function saveCotizacion() {
     }
   });
 
-  if (!costos.length && !costos_nuevos.length && !lotesCambiados.length
-      && tasaUSD === parseFloat(cotState.cotizacion.tasa_usd || 0)
-      && tasaEUR === parseFloat(cotState.cotizacion.tasa_eur || 0))
-    return toast('ℹ️ Sin cambios que guardar');
+  var tasaUSDActual = parseFloat((cotState.cotizacion.tasa_usd || 0));
+  var tasaEURAactual = parseFloat((cotState.cotizacion.tasa_eur || 0));
+  var sinCambios = !costos.length && !costos_nuevos.length && !lotesCambiados.length
+    && tasaUSD === tasaUSDActual && tasaEUR === tasaEURAactual;
+  if (sinCambios) return toast('ℹ️ Sin cambios que guardar');
 
   toast('⏳ Guardando...');
 
   for (var i = 0; i < lotesCambiados.length; i++) {
-    await apiPost({ action: 'asignarLote',
-      lote_id: lotesCambiados[i].lote_id,
-      cot_item_id: lotesCambiados[i].cot_item_id,
-      cotizacion_id: currentCotId });
+    await apiPost({
+      action:        'asignarLote',
+      lote_id:       lotesCambiados[i].lote_id,
+      cot_item_id:   lotesCambiados[i].cot_item_id,
+      cotizacion_id: currentCotId,
+    });
   }
 
   var res = await apiPost({
@@ -368,6 +305,31 @@ function resetEditor() {
   if (currentCotId) loadCotizacion(currentCotId);
 }
 
+// ── Costos manuales ───────────────────────────────────────
+
+function addManualCost() {
+  var nombre = document.getElementById('new-costo-nombre').value.trim();
+  var itemId = document.getElementById('new-costo-item').value.trim();
+  var valor  = parseFloat(document.getElementById('new-costo-valor').value || 0);
+  var moneda = document.getElementById('new-costo-moneda').value;
+  var tipo   = document.getElementById('new-costo-tipo').value;
+
+  if (!nombre || !itemId) return toast('⚠️ Nombre e ID de item son requeridos');
+
+  pendingNew.push({
+    nombre:      nombre,
+    tipo:        tipo,
+    moneda:      moneda,
+    valor_kg:    valor,
+    cot_item_id: itemId,
+  });
+  toast('✅ Costo "' + nombre + '" (' + moneda + ') agregado');
+
+  document.getElementById('new-costo-nombre').value = '';
+  document.getElementById('new-costo-item').value   = '';
+  document.getElementById('new-costo-valor').value  = '';
+}
+
 // ══════════════════════════════════════════════════════════
 //  Init
 // ══════════════════════════════════════════════════════════
@@ -381,10 +343,10 @@ async function init() {
       variedades = res.variedades.map(function(v) { return String(v.nombre).trim(); });
       console.log('[init] variedades cargadas:', variedades);
     } else {
-      console.warn('[init] No se cargaron variedades. Respuesta:', res);
+      console.warn('[init] No se cargaron variedades:', res);
     }
   } catch(e) {
-    console.error('[init] Error cargando variedades:', e);
+    console.error('[init] Error:', e);
   }
   addRfqItem();
 }
