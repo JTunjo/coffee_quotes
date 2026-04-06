@@ -5,7 +5,11 @@
 
 const USUARIO = 'asesor@cafe.com'; // mock; reemplazar con auth real
 
-// ── Estado global ─────────────────────────────────────────
+// ── Estado de tasas (en memoria mientras edita) ───────────
+var tasaUSD = 0;
+var tasaEUR = 0;
+
+
 var rfqItemCount = 0;
 var currentCotId = null;
 var cotState     = null;
@@ -121,10 +125,11 @@ function resetRfqForm() {
 }
 
 async function submitRFQ() {
-  var cliente = document.getElementById('rfq-cliente').value.trim();
-  var asesor  = document.getElementById('rfq-asesor').value.trim();
-  var fecha   = document.getElementById('rfq-fecha').value;
-  var items   = collectRfqItems();
+  var cliente  = document.getElementById('rfq-cliente').value.trim();
+  var asesor   = document.getElementById('rfq-asesor').value.trim();
+  var fecha    = document.getElementById('rfq-fecha').value;
+  var moneda   = document.getElementById('rfq-moneda').value;
+  var items    = collectRfqItems();
 
   if (!cliente || !asesor) return toast('⚠️ Completa cliente y asesor');
   if (!items.length)        return toast('⚠️ Agrega al menos un ítem');
@@ -213,6 +218,8 @@ async function loadCotizacion(cotId) {
   currentCotId = cotId;
   cotState     = res;
   cotState.rfqItems = res.rfqItems || [];
+  tasaUSD      = parseFloat(res.cotizacion.tasa_usd || 0);
+  tasaEUR      = parseFloat(res.cotizacion.tasa_eur || 0);
   pendingEdits = {};
   pendingNew   = [];
 
@@ -252,7 +259,25 @@ async function loadCotizacion(cotId) {
   toast('✅ Cotización lista');
 }
 
-async function handleVerificacion(vRes, cotId) {
+// Llamado al cambiar tasa en el encabezado — recalcula resumen en tiempo real
+function onTasaChange() {
+  tasaUSD = parseFloat(document.getElementById('tasa-usd').value || 0);
+  tasaEUR = parseFloat(document.getElementById('tasa-eur').value || 0);
+  if (cotState) renderSummaryFromState();
+}
+
+// Guarda tasas en Sheets (se llama al hacer guardar cotización)
+async function guardarTasasEnSheets() {
+  if (!currentCotId || (!tasaUSD && !tasaEUR)) return;
+  await apiPost({
+    action:        'guardarTasas',
+    cotizacion_id: currentCotId,
+    tasa_usd:      tasaUSD,
+    tasa_eur:      tasaEUR,
+  });
+}
+
+
   renderDisponibilidadBanner(vRes.resultados);
 
   var btnImpr      = document.getElementById('btn-imprimir');
@@ -298,36 +323,33 @@ async function saveCotizacion() {
   var costos        = Object.values(pendingEdits);
   var costos_nuevos = pendingNew;
 
-  // Recoger cambios de lote pendientes desde los selectores inline
   var lotesCambiados = [];
   document.querySelectorAll('select[data-lote-selector]').forEach(function(sel) {
     if (sel.dataset.loteOriginal !== sel.value) {
-      lotesCambiados.push({
-        cot_item_id: sel.dataset.cotItemId,
-        lote_id:     sel.value,
-      });
+      lotesCambiados.push({ cot_item_id: sel.dataset.cotItemId, lote_id: sel.value });
     }
   });
 
-  if (!costos.length && !costos_nuevos.length && !lotesCambiados.length)
+  if (!costos.length && !costos_nuevos.length && !lotesCambiados.length
+      && tasaUSD === parseFloat(cotState.cotizacion.tasa_usd || 0)
+      && tasaEUR === parseFloat(cotState.cotizacion.tasa_eur || 0))
     return toast('ℹ️ Sin cambios que guardar');
 
   toast('⏳ Guardando...');
 
-  // Guardar cambios de lote primero
   for (var i = 0; i < lotesCambiados.length; i++) {
-    await apiPost({
-      action:        'asignarLote',
-      lote_id:       lotesCambiados[i].lote_id,
-      cot_item_id:   lotesCambiados[i].cot_item_id,
-      cotizacion_id: currentCotId,
-    });
+    await apiPost({ action: 'asignarLote',
+      lote_id: lotesCambiados[i].lote_id,
+      cot_item_id: lotesCambiados[i].cot_item_id,
+      cotizacion_id: currentCotId });
   }
 
   var res = await apiPost({
     action:        'guardarCotizacion',
     cotizacion_id: currentCotId,
     usuario:       USUARIO,
+    tasa_usd:      tasaUSD,
+    tasa_eur:      tasaEUR,
     costos:        costos,
     costos_nuevos: costos_nuevos,
   });
