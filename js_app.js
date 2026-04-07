@@ -283,23 +283,79 @@ async function submitRFQ() {
 
 async function loadRFQList() {
   var tbody = document.getElementById('rfq-list-body');
-  tbody.innerHTML = '<tr><td colspan="6">Cargando...</td></tr>';
-  var res = await apiGet({ action: 'listRFQs' });
-  if (!res.ok || !res.rfqs.length) {
-    tbody.innerHTML = '<tr><td colspan="6" style="color:var(--muted)">Sin RFQs aún.</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="5">Cargando...</td></tr>';
+
+  var resRFQ = await apiGet({ action: 'listRFQs' });
+  if (!resRFQ.ok || !resRFQ.rfqs.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="color:var(--muted)">Sin RFQs aún.</td></tr>';
     return;
   }
-  tbody.innerHTML = res.rfqs.map(function(r) {
-    return '<tr>' +
+
+  // Cargar todas las cotizaciones de una vez
+  var resCots = await apiGet({ action: 'listRFQs' });
+  // Usamos listCotizaciones si existiera, pero por ahora cargamos por RFQ
+  // Construimos las filas secuencialmente
+  tbody.innerHTML = '';
+  for (var i = 0; i < resRFQ.rfqs.length; i++) {
+    var r   = resRFQ.rfqs[i];
+    var res = await apiGet({ action: 'getCotizacionesPorRFQ', rfqId: r.rfq_id });
+    var cots = (res.ok && res.cotizaciones) ? res.cotizaciones : [];
+
+    var optsHtml = cots.map(function(c) {
+      return '<option value="' + c.cotizacion_id + '">'
+        + (c.nombre || 'Sin nombre')
+        + ' — ' + c.estado
+        + '</option>';
+    }).join('');
+
+    var selectHtml = cots.length
+      ? '<select id="sel-cot-' + r.rfq_id + '" style="max-width:220px;margin-right:.4rem">' + optsHtml + '</select>'
+        + '<button class="btn btn-secondary btn-sm" onclick="abrirCotSeleccionada(\'' + r.rfq_id + '\')">Abrir</button>'
+      : '<span class="text-muted" style="font-size:.8rem">Sin cotizaciones</span>';
+
+    var tr = document.createElement('tr');
+    tr.innerHTML =
       '<td><code style="font-size:.75rem">' + r.rfq_id.slice(0, 8) + '…</code></td>' +
       '<td>' + r.cliente + '</td>' +
       '<td>' + r.asesor  + '</td>' +
       '<td>' + r.fecha   + '</td>' +
-      '<td><span class="tag tag-yellow">' + r.estado + '</span></td>' +
-      '<td><button class="btn btn-secondary btn-sm" ' +
-        'onclick="openCotFromRFQ(\'' + r.cotizacion_id + '\')">Ver cotización</button></td>' +
-      '</tr>';
-  }).join('');
+      '<td>' +
+        '<div style="display:flex;align-items:center;gap:.4rem;flex-wrap:wrap">' +
+          selectHtml +
+          '<button class="btn btn-ghost btn-sm" onclick="nuevaCotizacion(\'' + r.rfq_id + '\',\'' + (r.asesor || '') + '\')">+ Nueva</button>' +
+        '</div>' +
+      '</td>';
+    tbody.appendChild(tr);
+  }
+}
+
+function abrirCotSeleccionada(rfqId) {
+  var sel   = document.getElementById('sel-cot-' + rfqId);
+  var cotId = sel ? sel.value : null;
+  if (!cotId) return toast('⚠️ Selecciona una cotización');
+  openCotFromRFQ(cotId);
+}
+
+async function nuevaCotizacion(rfqId, asesor) {
+  var nombre = (prompt('Nombre para la nueva cotización:') || '').trim();
+  if (!nombre) return toast('⚠️ El nombre es obligatorio');
+
+  toast('⏳ Creando cotización...');
+  var res = await apiPost({
+    action: 'forkCotizacion',
+    rfq_id: rfqId,
+    nombre: nombre,
+    asesor: asesor,
+  });
+
+  if (!res.ok) return toast('❌ Error: ' + res.error);
+
+  toast('✅ Cotización "' + nombre + '" creada');
+  loadRFQList(); // refrescar lista
+  // Navegar a la nueva cotización
+  document.getElementById('cot-search-id').value = res.cotizacion_id;
+  showPage('cot');
+  loadCotizacion(res.cotizacion_id);
 }
 
 function openCotFromRFQ(cotId) {
