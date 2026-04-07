@@ -1,5 +1,4 @@
 <!DOCTYPE html>
-/* ── Última versión estable ─────────────────────────────────────── */
 <html lang="es">
 <head>
 <meta charset="UTF-8" />
@@ -111,6 +110,7 @@
     <button class="active" onclick="showPage('rfq')">Nuevo RFQ</button>
     <button onclick="showPage('list')">Mis RFQs</button>
     <button onclick="showPage('cot')">Cotización</button>
+    <button onclick="showPage('dir')">Directorio</button>
   </nav>
 </header>
 
@@ -233,6 +233,28 @@
       </div>
 
       <div class="summary-box mt-1" id="cot-summary"></div>
+    </div>
+  </div>
+
+  <!-- ── PAGE: DIRECTORIO ────────────────────────────────── -->
+  <div id="page-dir" class="hidden">
+    <div class="card">
+      <div class="card-title">🌱 Directorio de Agricultores</div>
+      <button class="btn btn-primary btn-sm mb-1" onclick="agregarFilaDirectorio()">+ Nuevo agricultor</button>
+      <div class="tbl-wrap">
+        <table id="dir-table">
+          <thead><tr>
+            <th>Finca</th>
+            <th>Origen</th>
+            <th>Agricultor</th>
+            <th>Teléfono</th>
+            <th>Correo</th>
+            <th>Contacto preferido</th>
+            <th></th>
+          </tr></thead>
+          <tbody id="dir-body"></tbody>
+        </table>
+      </div>
     </div>
   </div>
 
