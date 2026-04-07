@@ -2,16 +2,7 @@
 //  ui.js — Componentes de interfaz
 // ============================================================
 
-// ── Navegación ────────────────────────────────────────────
-function showPage(p) {
-  ['rfq', 'list', 'cot'].forEach(function(id) {
-    document.getElementById('page-' + id).classList.toggle('hidden', id !== p);
-  });
-  document.querySelectorAll('nav button').forEach(function(b, i) {
-    b.classList.toggle('active', ['rfq', 'list', 'cot'][i] === p);
-  });
-  if (p === 'list') loadRFQList();
-}
+// showPage vive en app.js — tiene acceso a loadDirectorio y loadRFQList
 
 // ── Toast ─────────────────────────────────────────────────
 function toast(msg, duration) {
