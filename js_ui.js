@@ -292,6 +292,8 @@ function renderCotizacion(data, soloLectura, resultadosDisp) {
       '<div class="form-grid" style="margin-bottom:.75rem">' +
         '<div><label>Fecha requerida</label>' +
           '<span' + (!fechaRaw ? ' style="color:var(--red)"' : '') + '>' + fechaReq + '</span></div>' +
+        '<div><label>Estado proceso</label>' +
+          '<span class="tag tag-blue">' + (item.estado_proceso || '—') + '</span></div>' +
         '<div><label>Presentación</label><span>' + item.presentacion + '</span></div>' +
         '<div><label>Cantidad</label><span>' + item.cantidad_unidades + ' ' + labelUnidad(item.presentacion) + '</span></div>' +
         '<div><label>Costo lote (COP/kg)</label>' +
