@@ -62,6 +62,12 @@ function addRfqItem() {
         '<option value="12Kg">12 Kg</option>' +
         '<option value="Granel">Granel</option>' +
       '</select></div>' +
+    '<div><label>Estado proceso</label>' +
+      '<select data-field="estado_proceso">' +
+        '<option value="Pergamino">Pergamino</option>' +
+        '<option value="Verde" selected>Verde</option>' +
+        '<option value="Tostado">Tostado</option>' +
+      '</select></div>' +
     '<div><label>Tier</label>' +
       '<select data-field="tier">' +
         '<option value="estandar">Estándar</option>' +
