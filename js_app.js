@@ -5,7 +5,20 @@
 
 const USUARIO = 'asesor@cafe.com';
 
-// ── Estado global ─────────────────────────────────────────
+// ── Navegación ────────────────────────────────────────────
+
+function showPage(p) {
+  ['rfq', 'list', 'cot', 'dir'].forEach(function(id) {
+    document.getElementById('page-' + id).classList.toggle('hidden', id !== p);
+  });
+  document.querySelectorAll('nav button').forEach(function(b, i) {
+    b.classList.toggle('active', ['rfq', 'list', 'cot', 'dir'][i] === p);
+  });
+  if (p === 'list') loadRFQList();
+  if (p === 'dir')  loadDirectorio();
+}
+
+
 var rfqItemCount = 0;
 var currentCotId = null;
 var cotState     = null;
@@ -16,8 +29,99 @@ var tasaUSD      = 0;
 var tasaEUR      = 0;
 
 // ══════════════════════════════════════════════════════════
-//  RFQ
+//  DIRECTORIO
 // ══════════════════════════════════════════════════════════
+
+var CONTACTO_OPTS = ['Llamada', 'WhatsApp', 'Correo', 'Otro'];
+
+async function loadDirectorio() {
+  var tbody = document.getElementById('dir-body');
+  tbody.innerHTML = '<tr><td colspan="7">Cargando...</td></tr>';
+  var res = await apiGet({ action: 'getDirectorio' });
+  if (!res.ok) {
+    tbody.innerHTML = '<tr><td colspan="7" style="color:var(--red)">Error al cargar directorio.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = '';
+  res.agricultores.forEach(function(a) {
+    tbody.appendChild(crearFilaDir(a));
+  });
+}
+
+function crearFilaDir(a) {
+  var tr = document.createElement('tr');
+  tr.dataset.id = a.agricultor_id || '';
+  tr.innerHTML = celdaEdit(a.finca,              'finca')
+    + celdaEdit(a.origen,            'origen')
+    + celdaEdit(a.agricultor,        'agricultor')
+    + celdaEdit(a.telefono,          'telefono')
+    + celdaEdit(a.correo,            'correo')
+    + celdaSelect(a.contacto_preferido)
+    + '<td>'
+      + '<button class="btn btn-secondary btn-sm" onclick="guardarFila(this)">💾</button>'
+    + '</td>';
+  return tr;
+}
+
+function celdaEdit(valor, campo) {
+  return '<td><input data-campo="' + campo + '" value="' + (valor || '') + '"'
+    + ' style="min-width:100px" /></td>';
+}
+
+function celdaSelect(valorActual) {
+  var opts = CONTACTO_OPTS.map(function(o) {
+    return '<option' + (o === valorActual ? ' selected' : '') + '>' + o + '</option>';
+  }).join('');
+  return '<td><select data-campo="contacto_preferido">' + opts + '</select></td>';
+}
+
+function agregarFilaDirectorio() {
+  var tbody = document.getElementById('dir-body');
+  var tr    = crearFilaDir({
+    agricultor_id:      '',
+    finca:              '',
+    origen:             '',
+    agricultor:         '',
+    telefono:           '',
+    correo:             '',
+    contacto_preferido: 'WhatsApp',
+  });
+  tbody.insertBefore(tr, tbody.firstChild);
+  tr.querySelector('input').focus();
+}
+
+async function guardarFila(btn) {
+  var tr   = btn.closest('tr');
+  var id   = tr.dataset.id || '';
+  var data = { agricultor_id: id };
+
+  tr.querySelectorAll('[data-campo]').forEach(function(el) {
+    data[el.dataset.campo] = el.value.trim();
+  });
+
+  if (!data.agricultor) return toast('⚠️ El nombre del agricultor es requerido');
+
+  btn.disabled    = true;
+  btn.textContent = '⏳';
+
+  var res = await apiPost({ action: 'guardarAgricultor', agricultor_id: id || undefined,
+                            finca:              data.finca,
+                            origen:             data.origen,
+                            agricultor:         data.agricultor,
+                            telefono:           data.telefono,
+                            correo:             data.correo,
+                            contacto_preferido: data.contacto_preferido });
+
+  btn.disabled    = false;
+  btn.textContent = '💾';
+
+  if (!res.ok) return toast('❌ Error: ' + res.error);
+
+  toast('✅ Agricultor guardado');
+  loadDirectorio();
+}
+
+
 
 function buildVariedadOptions() {
   if (!variedades.length) {
