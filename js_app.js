@@ -34,23 +34,40 @@ var tasaEUR      = 0;
 
 var rfqEditando = null; // RFQ cargado en el popup
 
+// Normaliza cualquier valor de fecha a YYYY-MM-DD
+function normalizarFecha(f) {
+  if (!f) return '';
+  if (f instanceof Date) return f.toISOString().slice(0, 10);
+  var s = String(f).trim();
+  // Si ya es YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  // Si viene como Date serial de Sheets (número)
+  var n = parseFloat(s);
+  if (!isNaN(n) && n > 40000) {
+    var d = new Date(Math.round((n - 25569) * 86400 * 1000));
+    return d.toISOString().slice(0, 10);
+  }
+  // Intento genérico
+  var d2 = new Date(s);
+  if (!isNaN(d2.getTime())) return d2.toISOString().slice(0, 10);
+  return '';
+}
+
 async function abrirEditarRFQ(rfqId) {
   toast('⏳ Cargando RFQ...');
   var res = await apiGet({ action: 'getRFQ', rfqId: rfqId });
   if (!res.ok) return toast('❌ ' + res.error);
 
   rfqEditando = res;
-  var rfq     = res.rfq;
-  var items   = res.items;
+  var rfq   = res.rfq;
+  var items = res.items;
 
-  // Encabezado
   document.getElementById('edit-rfq-id').value      = rfq.rfq_id;
-  document.getElementById('edit-rfq-cliente').value = rfq.cliente  || '';
-  document.getElementById('edit-rfq-asesor').value  = rfq.asesor   || '';
-  document.getElementById('edit-rfq-fecha').value   = rfq.fecha    || '';
+  document.getElementById('edit-rfq-cliente').value = rfq.cliente           || '';
+  document.getElementById('edit-rfq-asesor').value  = rfq.asesor            || '';
+  document.getElementById('edit-rfq-fecha').value   = normalizarFecha(rfq.fecha);
   document.getElementById('edit-rfq-moneda').value  = rfq.moneda_solicitada || 'USD';
 
-  // Ítems
   var cont = document.getElementById('edit-rfq-items');
   cont.innerHTML = '';
   for (var i = 0; i < items.length; i++) {
