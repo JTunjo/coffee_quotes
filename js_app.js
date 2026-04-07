@@ -29,8 +29,117 @@ var tasaUSD      = 0;
 var tasaEUR      = 0;
 
 // ══════════════════════════════════════════════════════════
-//  DIRECTORIO
+//  EDITAR RFQ — popup
 // ══════════════════════════════════════════════════════════
+
+var rfqEditando = null; // RFQ cargado en el popup
+
+async function abrirEditarRFQ(rfqId) {
+  toast('⏳ Cargando RFQ...');
+  var res = await apiGet({ action: 'getRFQ', rfqId: rfqId });
+  if (!res.ok) return toast('❌ ' + res.error);
+
+  rfqEditando = res;
+  var rfq     = res.rfq;
+  var items   = res.items;
+
+  // Encabezado
+  document.getElementById('edit-rfq-id').value      = rfq.rfq_id;
+  document.getElementById('edit-rfq-cliente').value = rfq.cliente  || '';
+  document.getElementById('edit-rfq-asesor').value  = rfq.asesor   || '';
+  document.getElementById('edit-rfq-fecha').value   = rfq.fecha    || '';
+  document.getElementById('edit-rfq-moneda').value  = rfq.moneda_solicitada || 'USD';
+
+  // Ítems
+  var cont = document.getElementById('edit-rfq-items');
+  cont.innerHTML = '';
+  for (var i = 0; i < items.length; i++) {
+    cont.appendChild(crearFilaEditItem(items[i]));
+  }
+
+  document.getElementById('modal-edit-rfq').classList.add('show');
+  toast('');
+}
+
+function crearFilaEditItem(item) {
+  var div = document.createElement('div');
+  div.style.cssText = 'border:1px solid var(--border);border-radius:var(--radius);' +
+    'padding:.6rem;margin-bottom:.5rem;background:var(--bg)';
+  div.dataset.rfqItemId = item.rfq_item_id;
+  div.innerHTML =
+    '<div style="font-size:.75rem;color:var(--muted);margin-bottom:.4rem">' +
+      'Ítem: <code>' + item.rfq_item_id.slice(0,8) + '…</code>' +
+    '</div>' +
+    '<div class="form-grid">' +
+      '<div><label>Variedad</label>' +
+        '<select data-campo="variedad">' + buildVariedadOptions(item.variedad) + '</select></div>' +
+      '<div><label>Destino</label>' +
+        '<input data-campo="destino" value="' + (item.destino || '') + '" /></div>' +
+      '<div><label>Fecha requerida</label>' +
+        '<input type="date" data-campo="fecha_requerida" value="' +
+          (item.fecha_requerida instanceof Date
+            ? item.fecha_requerida.toISOString().slice(0,10)
+            : String(item.fecha_requerida || '').slice(0,10)) + '" /></div>' +
+      '<div><label>Cantidad</label>' +
+        '<input type="number" min="1" data-campo="cantidad_unidades" value="' +
+          (item.cantidad_unidades || '') + '" /></div>' +
+    '</div>';
+  return div;
+}
+
+function buildVariedadOptions(selected) {
+  var opts = '<option value="">Selecciona…</option>';
+  for (var i = 0; i < variedades.length; i++) {
+    opts += '<option value="' + variedades[i] + '"' +
+      (variedades[i] === selected ? ' selected' : '') + '>' +
+      variedades[i] + '</option>';
+  }
+  return opts;
+}
+
+function cerrarEditarRFQ() {
+  document.getElementById('modal-edit-rfq').classList.remove('show');
+  rfqEditando = null;
+}
+
+async function guardarEditarRFQ() {
+  var rfqId = document.getElementById('edit-rfq-id').value;
+  if (!rfqId) return;
+
+  var encabezado = {
+    cliente:           document.getElementById('edit-rfq-cliente').value.trim(),
+    asesor:            document.getElementById('edit-rfq-asesor').value.trim(),
+    fecha:             document.getElementById('edit-rfq-fecha').value,
+    moneda_solicitada: document.getElementById('edit-rfq-moneda').value,
+  };
+
+  var items = [];
+  var filas = document.querySelectorAll('#edit-rfq-items [data-rfq-item-id]');
+  filas.forEach(function(fila) {
+    var obj = { rfq_item_id: fila.dataset.rfqItemId };
+    fila.querySelectorAll('[data-campo]').forEach(function(el) {
+      obj[el.dataset.campo] = el.value;
+    });
+    items.push(obj);
+  });
+
+  toast('⏳ Guardando...');
+  var res = await apiPost({
+    action:     'editarRFQ',
+    rfq_id:     rfqId,
+    usuario:    USUARIO,
+    encabezado: encabezado,
+    items:      items,
+  });
+
+  if (!res.ok) return toast('❌ Error: ' + res.error);
+
+  toast('✅ RFQ actualizado');
+  cerrarEditarRFQ();
+  loadRFQList();
+}
+
+
 
 var CONTACTO_OPTS = ['Llamada', 'WhatsApp', 'Correo', 'Otro'];
 
@@ -323,6 +432,7 @@ async function loadRFQList() {
         '<div style="display:flex;align-items:center;gap:.4rem;flex-wrap:wrap">' +
           selectHtml +
           '<button class="btn btn-ghost btn-sm" onclick="nuevaCotizacion(\'' + r.rfq_id + '\',\'' + (r.asesor || '') + '\')">+ Nueva</button>' +
+          '<button class="btn btn-ghost btn-sm" onclick="abrirEditarRFQ(\'' + r.rfq_id + '\')">✏️ Editar</button>' +
         '</div>' +
       '</td>';
     tbody.appendChild(tr);
