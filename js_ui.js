@@ -306,6 +306,23 @@ function renderCotizacion(data, soloLectura, resultadosDisp) {
         '<thead><tr><th>Costo</th><th>Tipo</th><th>Valor/kg</th><th>Factor</th><th>Subtotal COP</th></tr></thead>' +
         '<tbody>' + costoRowsHtml + '</tbody>' +
       '</table></div>' +
+      // Perfil sensorial — editable o solo lectura
+      '<div style="margin-top:.75rem">' +
+        '<label style="font-weight:700;color:var(--accent2)">Perfil sensorial' +
+          (!soloLectura ? ' <span style="color:var(--red);font-size:.75rem">* obligatorio</span>' : '') +
+        '</label>' +
+        (soloLectura
+          ? '<p style="font-size:.88rem;margin-top:.3rem;line-height:1.6">' +
+              (item.perfil_sensorial || '<em style="color:var(--muted)">Sin perfil sensorial</em>') +
+            '</p>'
+          : '<textarea' +
+              ' data-perfil-item="' + item.cot_item_id + '"' +
+              ' rows="3"' +
+              ' placeholder="Ej. Notas a durazno, jazmín y panela con acidez brillante y cuerpo sedoso..."' +
+              ' style="margin-top:.3rem;resize:vertical;font-size:.85rem"' +
+            '>' + (item.perfil_sensorial || '') + '</textarea>'
+        ) +
+      '</div>' +
       (!soloLectura ? '<p class="text-muted mt-1">cot_item_id: <code>' + item.cot_item_id + '</code></p>' : '');
 
     section.appendChild(card);
