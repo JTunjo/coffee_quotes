@@ -1,5 +1,4 @@
 <!DOCTYPE html>
-/* ──Ultima versión estable ─────────────────────────────────────── */
 <html lang="es">
 <head>
 <meta charset="UTF-8" />
@@ -60,6 +59,7 @@
 
   /* ── RFQ item row ───────────────────────────────── */
   .item-row { display: grid; grid-template-columns: 1fr 1fr 1fr 130px 90px 1fr 1fr 1fr auto; gap: .5rem; align-items: end; padding: .6rem; border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: .5rem; background: var(--bg); }
+  .item-row > [style*="grid-column"] { grid-column: 1 / -1; }
 
   /* ── Tags ───────────────────────────────────────── */
   .tag { display: inline-block; padding: .2rem .55rem; border-radius: 99px; font-size: .72rem; font-weight: 700; }
