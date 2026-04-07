@@ -71,6 +71,12 @@ function addRfqItem() {
       '</select></div>' +
     '<div><label>Lote ID (opcional)</label>' +
       '<input placeholder="auto" data-field="lote_id" /></div>' +
+    '<div style="grid-column:1/-1">' +
+      '<label>Perfil sensorial <span style="color:var(--muted);font-weight:400">(opcional)</span></label>' +
+      '<textarea data-field="perfil_sensorial" rows="2" ' +
+        'placeholder="Ej. Notas a durazno, jazmín y panela con acidez brillante y cuerpo sedoso..." ' +
+        'style="resize:vertical;font-size:.85rem"></textarea>' +
+    '</div>' +
     '<div style="padding-top:1.2rem">' +
       '<button class="btn btn-danger btn-sm" ' +
         'onclick="document.getElementById(\'' + id + '\').remove()">✕</button></div>';
@@ -257,6 +263,7 @@ async function saveCotizacion() {
   var costos        = Object.values(pendingEdits);
   var costos_nuevos = pendingNew;
 
+  // Recoger lotes cambiados
   var lotesCambiados = [];
   document.querySelectorAll('select[data-lote-selector]').forEach(function(sel) {
     if (sel.dataset.loteOriginal !== sel.value) {
@@ -264,10 +271,32 @@ async function saveCotizacion() {
     }
   });
 
-  var tasaUSDActual = parseFloat((cotState.cotizacion.tasa_usd || 0));
-  var tasaEURAactual = parseFloat((cotState.cotizacion.tasa_eur || 0));
-  var sinCambios = !costos.length && !costos_nuevos.length && !lotesCambiados.length
-    && tasaUSD === tasaUSDActual && tasaEUR === tasaEURAactual;
+  // Recoger perfiles sensoriales del DOM y validar
+  var perfiles       = [];
+  var faltanPerfiles = [];
+  document.querySelectorAll('textarea[data-perfil-item]').forEach(function(ta) {
+    var cotItemId = ta.dataset.perfilItem;
+    var valor     = ta.value.trim();
+    if (!valor) {
+      var item = cotState && cotState.items
+        ? cotState.items.filter(function(i) { return i.cot_item_id === cotItemId; })[0]
+        : null;
+      faltanPerfiles.push(item ? (item.variedad || cotItemId) : cotItemId);
+    } else {
+      perfiles.push({ cot_item_id: cotItemId, perfil_sensorial: valor });
+    }
+  });
+
+  if (faltanPerfiles.length) {
+    toast('⚠️ Perfil sensorial obligatorio en: ' + faltanPerfiles.join(', '), 5000);
+    return;
+  }
+
+  var tasaUSDActual  = parseFloat(cotState.cotizacion.tasa_usd || 0);
+  var tasaEURActual  = parseFloat(cotState.cotizacion.tasa_eur || 0);
+  var sinCambios = !costos.length && !costos_nuevos.length &&
+                   !lotesCambiados.length && !perfiles.length &&
+                   tasaUSD === tasaUSDActual && tasaEUR === tasaEURActual;
   if (sinCambios) return toast('ℹ️ Sin cambios que guardar');
 
   toast('⏳ Guardando...');
@@ -289,6 +318,7 @@ async function saveCotizacion() {
     tasa_eur:      tasaEUR,
     costos:        costos,
     costos_nuevos: costos_nuevos,
+    perfiles:      perfiles,
   });
 
   if (!res.ok) return toast('❌ Error: ' + res.error);
