@@ -1,5 +1,4 @@
 <!DOCTYPE html>
-/* ── Ultima estable productores ─────────────────────────────────────── */
 <html lang="es">
 <head>
 <meta charset="UTF-8" />
@@ -84,7 +83,7 @@
 
   /* ── Modal lote ─────────────────────────────────── */
   #modal-lote { position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 1000; align-items: center; justify-content: center; display: none; }
-  #modal-lote.show { display: flex; }
+  #modal-edit-rfq.show { display: flex !important; }
   .modal-box { background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow); padding: 1.5rem; max-width: 560px; width: 90%; max-height: 80vh; overflow-y: auto; }
 
   /* ── Banner disponibilidad ──────────────────────── */
@@ -274,7 +273,48 @@
   </div>
 </div>
 
-<!-- ── Scripts (orden importante) ───────────────── -->
+<!-- ── Modal editar RFQ ──────────────────────────────────── -->
+<div id="modal-edit-rfq" style="position:fixed;inset:0;background:rgba(0,0,0,.45);
+  z-index:1200;align-items:flex-start;justify-content:center;
+  padding-top:3rem;display:none;overflow-y:auto">
+  <div style="background:var(--surface);border-radius:var(--radius);
+    box-shadow:0 8px 32px rgba(0,0,0,.2);padding:1.5rem;
+    width:90%;max-width:700px;position:relative">
+
+    <button onclick="cerrarEditarRFQ()" style="position:absolute;top:.75rem;right:.75rem;
+      background:none;border:none;font-size:1.2rem;cursor:pointer;color:var(--muted)">✕</button>
+
+    <h3 style="color:var(--accent);margin-bottom:1rem">✏️ Editar RFQ</h3>
+    <input type="hidden" id="edit-rfq-id" />
+
+    <div class="card" style="margin-bottom:1rem">
+      <div class="card-title">Encabezado</div>
+      <div class="form-grid">
+        <div><label>Cliente</label><input id="edit-rfq-cliente" /></div>
+        <div><label>Asesor</label><input id="edit-rfq-asesor" /></div>
+        <div><label>Fecha</label><input id="edit-rfq-fecha" type="date" /></div>
+        <div><label>Moneda solicitada</label>
+          <select id="edit-rfq-moneda">
+            <option value="USD">USD — Dólar</option>
+            <option value="EUR">EUR — Euro</option>
+            <option value="COP">COP — Peso colombiano</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:1rem">
+      <div class="card-title">Ítems</div>
+      <div id="edit-rfq-items"></div>
+    </div>
+
+    <div style="display:flex;justify-content:flex-end;gap:.5rem">
+      <button class="btn btn-ghost" onclick="cerrarEditarRFQ()">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarEditarRFQ()">💾 Guardar cambios</button>
+    </div>
+  </div>
+</div>
+
 <script src="js_api.js"></script>
 <script src="js_ui.js"></script>
 <script src="js_app.js"></script>
