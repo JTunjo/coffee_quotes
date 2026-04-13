@@ -728,7 +728,6 @@ function getCotizacion(cotizacionId) {
     return false;
   });
 
-  var tasas      = sheetToObjects(SHEETS.TASAS);
   var allComisiones = SS.getSheetByName(SHEETS.COTIZACION_TASAS)
     ? sheetToObjects(SHEETS.COTIZACION_TASAS) : [];
   var comisiones = filterArr(allComisiones,
@@ -736,7 +735,7 @@ function getCotizacion(cotizacionId) {
 
   return { ok: true, cotizacion: cots[0], items: cotItems,
            costos: costos, rfqItems: rfqItems,
-           tasas: tasas, comisiones: comisiones };
+           comisiones: comisiones };
 }
 
 // ── Crear RFQ ─────────────────────────────────────────────

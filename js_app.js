@@ -530,17 +530,21 @@ async function loadCotizacion(cotId) {
   }
 
   try {
+    // Ensure tasas are available before any render — fetch if preload hasn't finished
+    if (!tasasCache) {
+      setLoadingMsg('Cargando catálogo...');
+      var tRes = await apiGet({ action: 'getTasas' });
+      if (tRes && tRes.ok && tRes.tasas) {
+        tasasCache = tRes.tasas;
+        try { sessionStorage.setItem(_TASAS_KEY, JSON.stringify({ ts: Date.now(), data: tRes.tasas })); } catch(e) {}
+      }
+    }
+
     setLoadingMsg('Cargando cotización...');
     var res = await apiGet({ action: 'getCotizacion', cotizacionId: cotId });
     if (!res.ok) { toast('❌ ' + res.error); return; }
 
-    // Cache tasas from response; fall back to pre-warmed cache
-    if (res.tasas && res.tasas.length) {
-      tasasCache = res.tasas;
-      try { sessionStorage.setItem(_TASAS_KEY, JSON.stringify({ ts: Date.now(), data: res.tasas })); } catch(e) {}
-    } else if (tasasCache) {
-      res.tasas = tasasCache;
-    }
+    res.tasas = tasasCache || [];
 
     currentCotId      = cotId;
     cotState          = res;
@@ -569,7 +573,7 @@ async function loadCotizacion(cotId) {
     setLoadingMsg('Actualizando datos...');
     var res2 = await apiGet({ action: 'getCotizacion', cotizacionId: cotId });
     if (res2.ok) {
-      if (!res2.tasas || !res2.tasas.length) res2.tasas = tasasCache || [];
+      res2.tasas        = tasasCache || [];
       cotState          = res2;
       cotState.rfqItems = res2.rfqItems || [];
       renderCotizacion(res2, false, vRes.resultados);
