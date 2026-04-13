@@ -278,14 +278,14 @@ function renderCotizacion(data, soloLectura, resultadosDisp) {
     if (!soloLectura && dispResult.lotes && dispResult.lotes.length > 1) {
       loteCostosMap[item.cot_item_id] = {};
       dispResult.lotes.forEach(function(l) {
-        loteCostosMap[item.cot_item_id][l.lote_id] = parseFloat(l.costo_usd_kg || 0);
+        loteCostosMap[item.cot_item_id][l.lote_id] = parseFloat(l.costo_cop_kg || 0);
       });
       var optsHtml = '';
       dispResult.lotes.forEach(function(l) {
         var sel = (l.lote_id === item.lote_id) ? ' selected' : '';
         optsHtml += '<option value="' + l.lote_id + '"' + sel + '>'
           + l.origen + ' · ' + l.proceso
-          + ' · $' + parseFloat(l.costo_usd_kg).toFixed(0) + ' COP/kg'
+          + ' · $' + parseFloat(l.costo_cop_kg).toFixed(0) + ' COP/kg'
           + ' · ' + l.kilos_disponibles + ' kg disp.'
           + '</option>';
       });

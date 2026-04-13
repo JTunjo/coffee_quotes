@@ -339,10 +339,6 @@ function verificarDisponibilidad(cotizacionId) {
   var disponibles = filterArr(sheetToObjects(SHEETS.DISPONIBILIDADES),
     function(d) { return d.activo === true || d.activo === 'TRUE'; });
 
-  var cot      = findOne(sheetToObjects(SHEETS.COTIZACIONES),
-    function(c) { return c.cotizacion_id === cotizacionId; }) || {};
-  var tasa_usd = parseFloat(cot.tasa_usd || 1);
-
   var resultados     = [];
   var hayIncompletos = false;
 
@@ -386,10 +382,10 @@ function verificarDisponibilidad(cotizacionId) {
       hayIncompletos = true;
     } else {
       lotesCandidatos.sort(function(a, b) {
-        return parseFloat(a.costo_usd_kg || 0) - parseFloat(b.costo_usd_kg || 0);
+        return parseFloat(a.costo_cop_kg || 0) - parseFloat(b.costo_cop_kg || 0);
       });
       var loteOptimo     = lotesCandidatos[0];
-      var costo_lote_cop = parseFloat(loteOptimo.costo_usd_kg || 0) * tasa_usd;
+      var costo_lote_cop = parseFloat(loteOptimo.costo_cop_kg || 0);
 
       _actualizarEstadoItem(item.cot_item_id, loteOptimo.lote_id, costo_lote_cop, 'completo');
 
@@ -399,8 +395,8 @@ function verificarDisponibilidad(cotizacionId) {
           variedad:               l.variedad,
           origen:                 l.origen,
           proceso:                l.proceso,
-          costo_usd_kg:           parseFloat(l.costo_usd_kg || 0),
-          costo_cop:              parseFloat(l.costo_usd_kg || 0) * tasa_usd,
+          costo_cop_kg:           parseFloat(l.costo_cop_kg || 0),
+          costo_cop:              parseFloat(l.costo_cop_kg || 0),
           kilos_disponibles:      parseFloat(l.kilos_disponibles || 0),
           fecha_disponible_desde: l.fecha_disponible_desde,
           fecha_disponible_hasta: l.fecha_disponible_hasta,
@@ -439,10 +435,7 @@ function asignarLote(body) {
   var lote  = findOne(lotes, function(l) { return l.lote_id === lote_id; });
   if (!lote) return { ok: false, error: 'Lote no encontrado' };
 
-  var cot            = findOne(sheetToObjects(SHEETS.COTIZACIONES),
-    function(c) { return c.cotizacion_id === cotizacion_id; }) || {};
-  var tasa_usd       = parseFloat(cot.tasa_usd || 1);
-  var costo_lote_cop = parseFloat(lote.costo_usd_kg || 0) * tasa_usd;
+  var costo_lote_cop = parseFloat(lote.costo_cop_kg || 0);
 
   _actualizarEstadoItem(cot_item_id, lote_id, costo_lote_cop, 'completo');
   recalcularTotales(cotizacion_id);
@@ -521,7 +514,7 @@ function forkCotizacion(body) {
     var cotItemId = uid();
 
     var lote          = findOne(disponibles, function(d) { return d.lote_id === item.lote_id; }) || {};
-    var costo_lote_kg = parseFloat(lote.costo_usd_kg || 0);
+    var costo_lote_kg = parseFloat(lote.costo_cop_kg || 0);
 
     appendRow(SHEETS.COTIZACION_ITEMS, {
       cot_item_id:       cotItemId,
@@ -766,8 +759,7 @@ function crearRFQ(body) {
     });
 
     var lote           = findOne(disponibles, function(d) { return d.lote_id === item.lote_id; }) || {};
-    var tasa_usd_rfq   = parseFloat(body.tasa_usd || 1);
-    var costo_lote_kg  = parseFloat(lote.costo_usd_kg || 0) * tasa_usd_rfq;
+    var costo_lote_kg  = parseFloat(lote.costo_cop_kg || 0);
 
     appendRow(SHEETS.COTIZACION_ITEMS, {
       cot_item_id:       cotItemId,
