@@ -175,6 +175,7 @@ function doGet(e) {
       else if (action === 'guardarAgricultor') result = guardarAgricultor(body);
       else if (action === 'forkCotizacion')    result = forkCotizacion(body);
       else if (action === 'editarRFQ')         result = editarRFQ(body);
+      else if (action === 'marcarItemIgnorado') result = marcarItemIgnorado(body);
       else result = { ok: false, error: 'Accion POST desconocida: ' + action };
     } else {
       var action = p.action;
@@ -220,11 +221,25 @@ function doPost(e) {
     else if (action === 'guardarAgricultor') result = guardarAgricultor(body);
     else if (action === 'forkCotizacion')    result = forkCotizacion(body);
     else if (action === 'editarRFQ')         result = editarRFQ(body);
+    else if (action === 'marcarItemIgnorado') result = marcarItemIgnorado(body);
     else result = { ok: false, error: 'Accion POST desconocida: ' + action };
     return jsonResponse(result);
   } catch (err) {
     return jsonResponse({ error: err.message }, 'error');
   }
+}
+
+// ── Ignorar ítem ─────────────────────────────────────────
+
+function marcarItemIgnorado(body) {
+  var cotItemId = String(body.cot_item_id || '');
+  var ignorado  = body.ignorado === true || String(body.ignorado).toLowerCase() === 'true';
+  if (!cotItemId) return { ok: false, error: 'cot_item_id requerido' };
+  updateRows(SHEETS.COTIZACION_ITEMS,
+    function(r) { return r.cot_item_id === cotItemId; },
+    function(r) { r.ignorado = ignorado; return r; }
+  );
+  return { ok: true };
 }
 
 // ── Variedades ────────────────────────────────────────────

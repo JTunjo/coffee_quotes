@@ -84,6 +84,13 @@ function formatCOP(v) {
 }
 function formatUSD(v) { return 'US$ ' + parseFloat(v).toFixed(2); }
 function formatEUR(v) { return '€ '   + parseFloat(v).toFixed(2); }
+function formatMon(v, moneda) {
+  switch ((moneda || 'USD').toUpperCase()) {
+    case 'USD': return formatUSD(v);
+    case 'EUR': return formatEUR(v);
+    default:    return formatCOP(v);
+  }
+}
 
 // ── Helpers de cálculo ────────────────────────────────────
 function factorPresentacion(presentacion, cantidad_unidades) {
@@ -169,38 +176,79 @@ function renderCotizacion(data, soloLectura, resultadosDisp) {
   var section = document.getElementById('cot-items-section');
   section.innerHTML = '';
 
+  // kg totales de todos los ítems (para prorrateo de costos globales)
+  var totalKgTodos = 0;
+  items.forEach(function(item) {
+    var f = factorPresentacion(item.presentacion, item.cantidad_unidades);
+    var c = parseFloat(item.cantidad_unidades || 0);
+    totalKgTodos += item.presentacion === 'Granel' ? c : c * f;
+  });
+
+  // Costos globales: los que no tienen cot_item_id
+  var globalCostos = costos.filter(function(c) { return !c.cot_item_id; });
+
+  var tblHeader =
+    '<thead><tr>' +
+      '<th>Costo</th><th>Tipo</th><th>Incoterm</th>' +
+      '<th>Valor/Kg (COP)</th><th>Valor/Und (COP)</th>' +
+      '<th>Valor Total (COP)</th><th>Valor Total (' + monedaRFQ + ')</th>' +
+    '</tr></thead>';
+
   items.forEach(function(item) {
     var dispResult = dispMap[item.cot_item_id] || {};
     var sinDisp    = dispResult.estado === 'sin_disponibilidad';
+    var ignorado   = item.ignorado === true || String(item.ignorado).toUpperCase() === 'TRUE';
 
-    var itemCostos   = costos.filter(function(c) { return c.cot_item_id === item.cot_item_id; });
-    var tUSD         = parseFloat(tasaUSD || 0);
-    var tEUR         = parseFloat(tasaEUR || 0);
+    var itemCostos = costos.filter(function(c) { return c.cot_item_id === item.cot_item_id; });
+    var tiposAdic  = ['manual', 'logistica', 'financiero'];
+    var costosBase = itemCostos.filter(function(c) { return tiposAdic.indexOf((c.tipo || '').toLowerCase()) === -1; });
+    var costosAdic = itemCostos.filter(function(c) { return tiposAdic.indexOf((c.tipo || '').toLowerCase()) !== -1; });
+
+    var tUSD = parseFloat(tasaUSD || 0);
+    var tEUR = parseFloat(tasaEUR || 0);
+
     var sumaCostosKgCOP = itemCostos.reduce(function(s, c) {
       return s + aCOP(parseFloat(c.valor_kg || 0), c.moneda, tUSD, tEUR);
     }, 0);
-    var pfKgCOP      = parseFloat(item.costo_lote_kg || 0) + sumaCostosKgCOP;
-    var factor       = factorPresentacion(item.presentacion, item.cantidad_unidades);
-    var puCOP        = pfKgCOP * factor;
-    var cant         = parseFloat(item.cantidad_unidades || 0);
-    var totalCOP     = item.presentacion === 'Granel' ? puCOP : puCOP * cant;
-    var totalUSD     = tUSD > 0 ? totalCOP / tUSD : 0;
-    var totalEUR     = tEUR > 0 ? totalCOP / tEUR : 0;
 
-    // Fecha requerida
+    var pfKgCOP = parseFloat(item.costo_lote_kg || 0) + sumaCostosKgCOP;
+    var factor  = factorPresentacion(item.presentacion, item.cantidad_unidades);
+    var cant    = parseFloat(item.cantidad_unidades || 0);
+    var cantKg  = item.presentacion === 'Granel' ? cant : cant * factor;
+    var puCOP   = pfKgCOP * factor;
+    var totalCOP  = item.presentacion === 'Granel' ? puCOP : puCOP * cant;
+    var totalUSD  = tUSD > 0 ? totalCOP / tUSD : 0;
+    var totalEUR  = tEUR > 0 ? totalCOP / tEUR : 0;
+
+    var pfKgMon = monedaRFQ === 'USD' && tUSD > 0 ? pfKgCOP / tUSD
+                : monedaRFQ === 'EUR' && tEUR > 0 ? pfKgCOP / tEUR : pfKgCOP;
+    var puMon   = monedaRFQ === 'USD' && tUSD > 0 ? puCOP / tUSD
+                : monedaRFQ === 'EUR' && tEUR > 0 ? puCOP / tEUR : puCOP;
+
+    var costoCompraMM = parseFloat(item.costo_lote_kg || 0) * cantKg / 1e6;
+    var coteLoteMM    = totalCOP / 1e6;
+    var coteLoteKUSD  = totalUSD / 1000;
+    var coteLoteKEUR  = totalEUR / 1000;
+
     var rfqItem  = rfqItems.find(function(r) { return r.rfq_item_id === item.rfq_item_id; }) || {};
     var fechaRaw = rfqItem.fecha_requerida;
     var fechaReq = fechaRaw
       ? (fechaRaw instanceof Date ? fechaRaw.toISOString().slice(0, 10) : String(fechaRaw).slice(0, 10))
       : '—';
 
-    // Badge sin disponibilidad
-    var badgeSinDisp = sinDisp
-      ? '<span style="background:var(--red);color:#fff;font-size:.72rem;font-weight:700;' +
-        'padding:.2rem .6rem;border-radius:99px;margin-left:.5rem">⚠ Sin disponibilidad</span>'
-      : '';
+    var dispBadge = sinDisp
+      ? '<span class="tag" style="background:var(--red);color:#fff;margin-left:.4rem">⚠ Sin disponibilidad</span>'
+      : '<span class="tag tag-green" style="margin-left:.4rem">✓ Disponible</span>';
 
-    // Selector de lote
+    var ignorarHtml = !soloLectura
+      ? '<label style="display:flex;align-items:center;gap:.3rem;font-size:.78rem;cursor:pointer;margin-left:auto;white-space:nowrap">' +
+          '<input type="checkbox"' + (ignorado ? ' checked' : '') +
+          ' onchange="toggleIgnorarItem(this,\'' + item.cot_item_id + '\')" />' +
+          'Ignorar' +
+        '</label>'
+      : (ignorado ? '<span class="tag tag-yellow" style="margin-left:auto">Ignorado</span>' : '');
+
+    // Selector de lote (lógica existente sin cambios)
     var selectorLote = '';
     if (!soloLectura && dispResult.lotes && dispResult.lotes.length > 1) {
       loteCostosMap[item.cot_item_id] = {};
@@ -223,7 +271,7 @@ function renderCotizacion(data, soloLectura, resultadosDisp) {
           '<select data-lote-selector="1"' +
             ' data-cot-item-id="' + item.cot_item_id + '"' +
             ' data-lote-original="' + (item.lote_id || '') + '"' +
-            ' onchange="onLoteChange(this, \'' + item.cot_item_id + '\', ' + cant + ', \'' + item.presentacion + '\')">' +
+            ' onchange="onLoteChange(this,\'' + item.cot_item_id + '\',' + cant + ',\'' + item.presentacion + '\')">' +
             optsHtml +
           '</select>' +
         '</div>';
@@ -235,18 +283,18 @@ function renderCotizacion(data, soloLectura, resultadosDisp) {
         '</div>';
     }
 
-    // Filas de costos
-    var costoRowsHtml = '';
-    itemCostos.forEach(function(c) {
-      var f    = factorPresentacion(item.presentacion, item.cantidad_unidades);
+    // Helper local: genera fila de tabla de costos con nuevas columnas
+    function costoRow(c) {
       var v    = parseFloat(c.valor_kg || 0);
       var mon  = (c.moneda || 'COP').toUpperCase();
       var vCOP = aCOP(v, mon, tUSD, tEUR);
-      var sub  = item.presentacion === 'Granel' ? vCOP * f : vCOP * f * cant;
+      var undCOP  = vCOP * factor;
+      var totCOP  = item.presentacion === 'Granel' ? vCOP * factor : vCOP * factor * cant;
+      var totMon  = monedaRFQ === 'USD' && tUSD > 0 ? totCOP / tUSD
+                  : monedaRFQ === 'EUR' && tEUR > 0 ? totCOP / tEUR : totCOP;
 
-      var inputCell = soloLectura
-        ? '<td>' + Math.round(v).toLocaleString('es-CO') +
-            ' <span class="tag tag-blue" style="font-size:.65rem">' + mon + '</span></td>'
+      var valKgCell = soloLectura
+        ? '<td>' + Math.round(vCOP).toLocaleString('es-CO') + '</td>'
         : '<td style="display:flex;gap:.3rem;align-items:center">' +
             '<input type="number" step="1" value="' + Math.round(v) + '"' +
             ' data-costo-id="'     + c.costo_id            + '"' +
@@ -255,51 +303,136 @@ function renderCotizacion(data, soloLectura, resultadosDisp) {
             ' data-presentacion="' + item.presentacion       + '"' +
             ' data-lote-costo="'   + item.costo_lote_kg      + '"' +
             ' data-moneda="'       + mon                     + '"' +
-            ' onchange="onCostoChange(this)" style="width:110px" />' +
+            ' onchange="onCostoChange(this)" style="width:100px" />' +
             '<span class="tag tag-blue" style="font-size:.65rem">' + mon + '</span>' +
           '</td>';
 
-      costoRowsHtml +=
-        '<tr id="row-' + c.costo_id + '">' +
-          '<td>' + c.nombre + '</td>' +
-          '<td><span class="tag tag-blue">' + c.tipo + '</span></td>' +
-          inputCell +
-          '<td class="text-muted" style="font-size:.75rem">x ' + f.toFixed(4) + '</td>' +
-          '<td id="sub-' + c.costo_id + '">' + formatCOP(sub) + '</td>' +
+      return '<tr id="row-' + c.costo_id + '">' +
+        '<td>' + c.nombre + '</td>' +
+        '<td><span class="tag tag-blue">' + c.tipo + '</span></td>' +
+        '<td>' + (c.incoterm || '—') + '</td>' +
+        valKgCell +
+        '<td>' + Math.round(undCOP).toLocaleString('es-CO') + '</td>' +
+        '<td id="sub-' + c.costo_id + '">' + Math.round(totCOP).toLocaleString('es-CO') + '</td>' +
+        '<td>' + formatMon(totMon, monedaRFQ) + '</td>' +
+      '</tr>';
+    }
+
+    var emptyRow = '<tr><td colspan="7" style="color:var(--muted);font-size:.78rem;text-align:center">Sin registros</td></tr>';
+    var costosBaseRows = costosBase.map(costoRow).join('');
+    var costosAdicRows = costosAdic.map(costoRow).join('');
+
+    // Valores globales prorrateados para este ítem
+    var prorrateoHtml = '';
+    if (globalCostos.length && totalKgTodos > 0) {
+      var proporcion = cantKg / totalKgTodos;
+      var rows = globalCostos.map(function(gc) {
+        var vCOP       = aCOP(parseFloat(gc.valor_kg || 0), gc.moneda, tUSD, tEUR);
+        var totGlobalCOP = vCOP * totalKgTodos;
+        var prorCOP    = totGlobalCOP * proporcion;
+        var prorMon    = monedaRFQ === 'USD' && tUSD > 0 ? prorCOP / tUSD
+                       : monedaRFQ === 'EUR' && tEUR > 0 ? prorCOP / tEUR : prorCOP;
+        return '<tr>' +
+          '<td>' + gc.nombre + '</td>' +
+          '<td><span class="tag tag-blue">' + gc.tipo + '</span></td>' +
+          '<td>' + (proporcion * 100).toFixed(1) + '%</td>' +
+          '<td>' + Math.round(prorCOP).toLocaleString('es-CO') + ' COP</td>' +
+          '<td>' + formatMon(prorMon, monedaRFQ) + '</td>' +
         '</tr>';
-    });
+      }).join('');
+      prorrateoHtml =
+        '<div style="margin-bottom:1rem">' +
+          '<div style="font-size:.8rem;font-weight:700;color:var(--accent2);margin-bottom:.35rem">Valores Globales Prorrateados</div>' +
+          '<div class="tbl-wrap"><table>' +
+            '<thead><tr><th>Costo</th><th>Tipo</th><th>Proporción</th><th>Valor (COP)</th><th>Valor (' + monedaRFQ + ')</th></tr></thead>' +
+            '<tbody>' + rows + '</tbody>' +
+          '</table></div>' +
+        '</div>';
+    }
 
     var card = document.createElement('div');
     card.className = 'card';
-    if (sinDisp) card.style.border = '2px solid var(--red)';
+    card.dataset.cotItemId = item.cot_item_id;
+    if (sinDisp && !ignorado) card.style.border = '2px solid var(--red)';
+    if (ignorado) card.style.opacity = '0.55';
 
     card.innerHTML =
-      '<div class="card-title">' +
-        '📦 ' + (item.variedad || '—') + ' · ' + (item.origen || '—') +
-        ' <span class="tag tag-blue" style="margin-left:.5rem">' + item.presentacion + '</span>' +
-        ' <span class="tag tag-green" style="margin-left:.25rem">' + item.tier + '</span>' +
-        badgeSinDisp +
+      // ── Encabezado del ítem ──────────────────────────────
+      '<div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;' +
+        'margin-bottom:.75rem;padding-bottom:.6rem;border-bottom:1px solid var(--border)">' +
+        '<span style="font-weight:700;color:var(--accent)">📦 ' + (item.variedad || '—') + '</span>' +
+        '<span class="tag tag-blue">' + (item.origen || '—') + '</span>' +
+        '<span style="color:var(--muted);font-size:.8rem">→</span>' +
+        '<span class="tag tag-green">' + (rfqItem.destino || item.destino || '—') + '</span>' +
+        dispBadge +
+        ignorarHtml +
       '</div>' +
+      // ── Línea 1: datos del ítem ──────────────────────────
       '<div class="form-grid" style="margin-bottom:.75rem">' +
         '<div><label>Fecha requerida</label>' +
           '<span' + (!fechaRaw ? ' style="color:var(--red)"' : '') + '>' + fechaReq + '</span></div>' +
-        '<div><label>Estado proceso</label>' +
-          '<span class="tag tag-blue">' + (item.estado_proceso || '—') + '</span></div>' +
-        '<div><label>Presentación</label><span>' + item.presentacion + '</span></div>' +
+        '<div><label>Presentación</label><span class="tag tag-blue">' + item.presentacion + '</span></div>' +
+        '<div><label>Estado proceso</label><span class="tag tag-blue">' + (item.estado_proceso || '—') + '</span></div>' +
+        '<div><label>Tier</label><span class="tag tag-green">' + (item.tier || '—') + '</span></div>' +
         '<div><label>Cantidad</label><span>' + item.cantidad_unidades + ' ' + labelUnidad(item.presentacion) + '</span></div>' +
-        '<div><label>Costo lote (COP/kg)</label>' +
-          '<span' + (sinDisp ? ' style="color:var(--red);font-weight:700"' : '') + '>' +
-          formatCOP(parseFloat(item.costo_lote_kg || 0)) + '</span></div>' +
-        '<div><label>Total COP</label><strong id="tot-cop-' + item.cot_item_id + '">' + formatCOP(totalCOP) + '</strong></div>' +
-        '<div><label>Total USD</label><strong id="tot-usd-' + item.cot_item_id + '">' + formatUSD(totalUSD) + '</strong></div>' +
-        '<div><label>Total EUR</label><strong id="tot-eur-' + item.cot_item_id + '">' + formatEUR(totalEUR) + '</strong></div>' +
+      '</div>' +
+      // ── Línea 2: costos por unidad / kg ─────────────────
+      '<div class="form-grid" style="margin-bottom:.75rem">' +
+        '<div><label>Costo x Und (COP)</label>' +
+          '<strong id="pu-cop-' + item.cot_item_id + '">' + formatCOP(puCOP) + '</strong></div>' +
+        '<div><label>Costo x Und (' + monedaRFQ + ')</label>' +
+          '<strong id="pu-mon-' + item.cot_item_id + '">' + formatMon(puMon, monedaRFQ) + '</strong></div>' +
+        '<div><label>Costo x Kg (COP)</label>' +
+          '<strong id="pkg-cop-' + item.cot_item_id + '">' + formatCOP(pfKgCOP) + '</strong></div>' +
+        '<div><label>Costo x Kg (' + monedaRFQ + ')</label>' +
+          '<strong id="pkg-mon-' + item.cot_item_id + '">' + formatMon(pfKgMon, monedaRFQ) + '</strong></div>' +
+      '</div>' +
+      // ── Línea 3: totales del lote ────────────────────────
+      '<div class="form-grid" style="margin-bottom:.75rem">' +
+        '<div><label>Costo Compra MM COP (Disp.)</label>' +
+          '<strong>' + costoCompraMM.toFixed(3) + ' MM</strong></div>' +
+        '<div><label>Costo Total Lote (MM COP)</label>' +
+          '<strong id="tot-cop-' + item.cot_item_id + '">' + coteLoteMM.toFixed(3) + ' MM</strong></div>' +
+        '<div><label>Costo Total Lote (KUSD)</label>' +
+          '<strong id="tot-usd-' + item.cot_item_id + '">' + coteLoteKUSD.toFixed(2) + ' K</strong></div>' +
+        '<div><label>Costo Total Lote (KEUR)</label>' +
+          '<strong id="tot-eur-' + item.cot_item_id + '">' + coteLoteKEUR.toFixed(2) + ' K</strong></div>' +
       '</div>' +
       selectorLote +
-      '<div class="tbl-wrap"><table>' +
-        '<thead><tr><th>Costo</th><th>Tipo</th><th>Valor/kg</th><th>Factor</th><th>Subtotal COP</th></tr></thead>' +
-        '<tbody>' + costoRowsHtml + '</tbody>' +
-      '</table></div>' +
-      // Perfil sensorial — editable o solo lectura
+      // ── Detalle Costos ───────────────────────────────────
+      '<div style="margin-bottom:1rem">' +
+        '<div style="font-size:.8rem;font-weight:700;color:var(--accent2);margin-bottom:.35rem">Detalle Costos</div>' +
+        '<div class="tbl-wrap"><table>' + tblHeader +
+          '<tbody>' + (costosBaseRows || emptyRow) + '</tbody>' +
+        '</table></div>' +
+      '</div>' +
+      // ── Costos adicionales ───────────────────────────────
+      '<div style="margin-bottom:1rem">' +
+        '<div style="font-size:.8rem;font-weight:700;color:var(--accent2);margin-bottom:.35rem">Costos adicionales</div>' +
+        '<div class="tbl-wrap"><table>' + tblHeader +
+          '<tbody>' + (costosAdicRows || emptyRow) + '</tbody>' +
+        '</table></div>' +
+      '</div>' +
+      // ── Comisiones y Descuentos (estructura placeholder) ─
+      '<div style="margin-bottom:1rem">' +
+        '<div style="font-size:.8rem;font-weight:700;color:var(--accent2);margin-bottom:.35rem">Detalle Comisiones y Descuentos</div>' +
+        '<div class="tbl-wrap"><table>' +
+          '<thead><tr>' +
+            '<th>Detalle</th><th>% (Editable)</th>' +
+            '<th>Valor (COP)</th><th>Valor (USD)</th><th>Valor (EUR)</th>' +
+          '</tr></thead>' +
+          '<tbody>' +
+            '<tr><td style="color:var(--muted);font-style:italic">Comisión ventas</td>' +
+              '<td><input type="number" step="0.1" placeholder="0.0" style="width:70px" disabled /></td>' +
+              '<td style="color:var(--muted)">—</td><td style="color:var(--muted)">—</td><td style="color:var(--muted)">—</td></tr>' +
+            '<tr><td style="color:var(--muted);font-style:italic">Descuento cliente</td>' +
+              '<td><input type="number" step="0.1" placeholder="0.0" style="width:70px" disabled /></td>' +
+              '<td style="color:var(--muted)">—</td><td style="color:var(--muted)">—</td><td style="color:var(--muted)">—</td></tr>' +
+          '</tbody>' +
+        '</table></div>' +
+      '</div>' +
+      prorrateoHtml +
+      // ── Perfil sensorial (sin cambios) ───────────────────
       '<div style="margin-top:.75rem">' +
         '<label style="font-weight:700;color:var(--accent2)">Perfil sensorial' +
           (!soloLectura ? ' <span style="color:var(--red);font-size:.75rem">* obligatorio</span>' : '') +
@@ -343,36 +476,45 @@ function onCostoChange(input) {
   var subCOP = presentacion === 'Granel' ? vCOP * factor : vCOP * factor * cantidad;
 
   var subEl = document.getElementById('sub-' + costoId);
-  if (subEl) subEl.textContent = formatCOP(subCOP);
+  if (subEl) subEl.textContent = Math.round(subCOP).toLocaleString('es-CO');
 
   recalcItemUI(itemId, loteCosto, cantidad, presentacion);
   renderSummaryFromState();
 }
 
 function recalcItemUI(itemId, loteCosto, cantidad, presentacion) {
-  var tUSD = parseFloat(tasaUSD || 0);
-  var tEUR = parseFloat(tasaEUR || 0);
+  var tUSD   = parseFloat(tasaUSD || 0);
+  var tEUR   = parseFloat(tasaEUR || 0);
+  var monRFQ = cotState ? (cotState.cotizacion.moneda_solicitada || 'USD').toUpperCase() : 'USD';
 
-  var inputs = document.querySelectorAll('[data-item-id="' + itemId + '"]');
+  var inputs  = document.querySelectorAll('[data-item-id="' + itemId + '"]');
   var sumaCOP = 0;
   inputs.forEach(function(inp) {
     var mon = inp.dataset.moneda || 'COP';
     sumaCOP += aCOP(parseFloat(inp.value || 0), mon, tUSD, tEUR);
   });
 
-  var pfKgCOP    = loteCosto + sumaCOP;
-  var factor     = factorPresentacion(presentacion, cantidad);
-  var puCOP      = pfKgCOP * factor;
-  var totalCOP   = presentacion === 'Granel' ? puCOP : puCOP * cantidad;
-  var totalUSD   = tUSD > 0 ? totalCOP / tUSD : 0;
-  var totalEUR   = tEUR > 0 ? totalCOP / tEUR : 0;
+  var pfKgCOP  = loteCosto + sumaCOP;
+  var factor   = factorPresentacion(presentacion, cantidad);
+  var cant     = parseFloat(cantidad || 0);
+  var puCOP    = pfKgCOP * factor;
+  var totalCOP = presentacion === 'Granel' ? puCOP : puCOP * cant;
+  var totalUSD = tUSD > 0 ? totalCOP / tUSD : 0;
+  var totalEUR = tEUR > 0 ? totalCOP / tEUR : 0;
 
-  var copEl = document.getElementById('tot-cop-' + itemId);
-  var usdEl = document.getElementById('tot-usd-' + itemId);
-  var eurEl = document.getElementById('tot-eur-' + itemId);
-  if (copEl) copEl.textContent = formatCOP(totalCOP);
-  if (usdEl) usdEl.textContent = formatUSD(totalUSD);
-  if (eurEl) eurEl.textContent = formatEUR(totalEUR);
+  var pfKgMon = monRFQ === 'USD' && tUSD > 0 ? pfKgCOP / tUSD
+              : monRFQ === 'EUR' && tEUR > 0 ? pfKgCOP / tEUR : pfKgCOP;
+  var puMon   = monRFQ === 'USD' && tUSD > 0 ? puCOP / tUSD
+              : monRFQ === 'EUR' && tEUR > 0 ? puCOP / tEUR : puCOP;
+
+  var el;
+  el = document.getElementById('pu-cop-'  + itemId); if (el) el.textContent = formatCOP(puCOP);
+  el = document.getElementById('pu-mon-'  + itemId); if (el) el.textContent = formatMon(puMon, monRFQ);
+  el = document.getElementById('pkg-cop-' + itemId); if (el) el.textContent = formatCOP(pfKgCOP);
+  el = document.getElementById('pkg-mon-' + itemId); if (el) el.textContent = formatMon(pfKgMon, monRFQ);
+  el = document.getElementById('tot-cop-' + itemId); if (el) el.textContent = (totalCOP / 1e6).toFixed(3) + ' MM';
+  el = document.getElementById('tot-usd-' + itemId); if (el) el.textContent = (totalUSD / 1000).toFixed(2) + ' K';
+  el = document.getElementById('tot-eur-' + itemId); if (el) el.textContent = (totalEUR / 1000).toFixed(2) + ' K';
 }
 
 // ── Resumen multicurrency ─────────────────────────────────
@@ -381,50 +523,86 @@ function renderSummary(items, costos) {
   var tEUR   = parseFloat(tasaEUR || 0);
   var monRFQ = cotState ? (cotState.cotizacion.moneda_solicitada || 'USD').toUpperCase() : 'USD';
 
+  var globalCostos = costos.filter(function(c) { return !c.cot_item_id; });
+  var totalKgTodos = 0;
+  items.forEach(function(item) {
+    var f = factorPresentacion(item.presentacion, item.cantidad_unidades);
+    var c = parseFloat(item.cantidad_unidades || 0);
+    totalKgTodos += item.presentacion === 'Granel' ? c : c * f;
+  });
+
   var grandCOP = 0;
+  var grandUSD = 0;
+  var grandEUR = 0;
   var itemRows = '';
 
   items.forEach(function(item) {
     var loteCosto = parseFloat(item.costo_lote_kg || 0);
-
-    // Para cada ítem: priorizar valores editados en DOM sobre cotState
-    var inputs = document.querySelectorAll('[data-item-id="' + item.cot_item_id + '"]');
-    var sumaCOP = 0;
+    var inputs    = document.querySelectorAll('[data-item-id="' + item.cot_item_id + '"]');
+    var sumaCOP   = 0;
 
     if (inputs.length > 0) {
-      // Hay inputs en el DOM — leer valores actuales (pueden tener ediciones pendientes)
       inputs.forEach(function(inp) {
         var mon = inp.dataset.moneda || 'COP';
         sumaCOP += aCOP(parseFloat(inp.value || 0), mon, tUSD, tEUR);
       });
     } else {
-      // No hay inputs (solo lectura) — usar costos de cotState
       var itemCostos = costos.filter(function(c) { return c.cot_item_id === item.cot_item_id; });
       itemCostos.forEach(function(c) {
         sumaCOP += aCOP(parseFloat(c.valor_kg || 0), c.moneda, tUSD, tEUR);
       });
     }
 
-    var pfKgCOP  = loteCosto + sumaCOP;
-    var factor   = factorPresentacion(item.presentacion, item.cantidad_unidades);
-    var puCOP    = pfKgCOP * factor;
-    var cant     = parseFloat(item.cantidad_unidades || 0);
-    var totCOP   = item.presentacion === 'Granel' ? puCOP : puCOP * cant;
-    var totUSD   = tUSD > 0 ? totCOP / tUSD : 0;
-    var totEUR   = tEUR > 0 ? totCOP / tEUR : 0;
-    grandCOP    += totCOP;
+    var pfKgCOP = loteCosto + sumaCOP;
+    var factor  = factorPresentacion(item.presentacion, item.cantidad_unidades);
+    var cant    = parseFloat(item.cantidad_unidades || 0);
+    var puCOP   = pfKgCOP * factor;
+    var totCOP  = item.presentacion === 'Granel' ? puCOP : puCOP * cant;
+    var totUSD  = tUSD > 0 ? totCOP / tUSD : 0;
+    var totEUR  = tEUR > 0 ? totCOP / tEUR : 0;
+
+    var pfKgMon = monRFQ === 'USD' && tUSD > 0 ? pfKgCOP / tUSD
+                : monRFQ === 'EUR' && tEUR > 0 ? pfKgCOP / tEUR : pfKgCOP;
+    var puMon   = monRFQ === 'USD' && tUSD > 0 ? puCOP / tUSD
+                : monRFQ === 'EUR' && tEUR > 0 ? puCOP / tEUR : puCOP;
+
+    grandCOP += totCOP;
+    grandUSD += totUSD;
+    grandEUR += totEUR;
 
     itemRows +=
       '<tr>' +
-        '<td>' + (item.variedad || '—') + ' ' + item.presentacion + ' x' + item.cantidad_unidades + '</td>' +
-        summaryCell(formatCOP(totCOP), monRFQ === 'COP') +
-        summaryCell(formatUSD(totUSD), monRFQ === 'USD') +
-        summaryCell(formatEUR(totEUR), monRFQ === 'EUR') +
+        '<td>' + (item.variedad || '—') + ' ' + item.presentacion + ' ×' + item.cantidad_unidades + '</td>' +
+        summaryCell(formatCOP(totCOP),   monRFQ === 'COP') +
+        summaryCell(formatUSD(totUSD),   monRFQ === 'USD') +
+        summaryCell(formatEUR(totEUR),   monRFQ === 'EUR') +
+        '<td>' + formatMon(pfKgMon, monRFQ) + '/kg</td>' +
+        '<td>' + formatMon(puMon,   monRFQ) + '/und</td>' +
       '</tr>';
   });
 
-  var grandUSD = tUSD > 0 ? grandCOP / tUSD : 0;
-  var grandEUR = tEUR > 0 ? grandCOP / tEUR : 0;
+  // Costos globales
+  var globalRows = '';
+  globalCostos.forEach(function(gc) {
+    var vCOP    = aCOP(parseFloat(gc.valor_kg || 0), gc.moneda, tUSD, tEUR);
+    var totGCOP = vCOP * totalKgTodos;
+    var totGUSD = tUSD > 0 ? totGCOP / tUSD : 0;
+    var totGEUR = tEUR > 0 ? totGCOP / tEUR : 0;
+    var pkgMon  = monRFQ === 'USD' && tUSD > 0 ? vCOP / tUSD
+                : monRFQ === 'EUR' && tEUR > 0 ? vCOP / tEUR : vCOP;
+    grandCOP += totGCOP;
+    grandUSD += totGUSD;
+    grandEUR += totGEUR;
+    globalRows +=
+      '<tr>' +
+        '<td>' + gc.nombre + '</td>' +
+        summaryCell(formatCOP(totGCOP), monRFQ === 'COP') +
+        summaryCell(formatUSD(totGUSD), monRFQ === 'USD') +
+        summaryCell(formatEUR(totGEUR), monRFQ === 'EUR') +
+        '<td>' + formatMon(pkgMon, monRFQ) + '/kg</td>' +
+        '<td>—</td>' +
+      '</tr>';
+  });
 
   var el = document.getElementById('cot-summary');
   if (!el) return;
@@ -436,22 +614,39 @@ function renderSummary(items, costos) {
     (sinTasas
       ? '<p style="margin:.4rem 0;font-size:.78rem;color:var(--red)">⚠ Ingresa las tasas de cambio para ver totales en USD y EUR.</p>'
       : '') +
+    // Tabla de ítems (dentro de details)
     '<details style="margin-top:.75rem">' +
       '<summary style="cursor:pointer;font-size:.85rem;color:var(--accent2);margin-bottom:.5rem">Ver detalle por ítem ▸</summary>' +
       '<div class="tbl-wrap" style="margin-top:.5rem"><table>' +
         '<thead><tr>' +
           '<th>Ítem</th>' +
-          summaryTH('COP', monRFQ === 'COP') +
-          summaryTH('USD', monRFQ === 'USD') +
-          summaryTH('EUR', monRFQ === 'EUR') +
+          summaryTH('Total COP', monRFQ === 'COP') +
+          summaryTH('Total USD', monRFQ === 'USD') +
+          summaryTH('Total EUR', monRFQ === 'EUR') +
+          '<th>' + monRFQ + '/Kg</th>' +
+          '<th>' + monRFQ + '/Und</th>' +
         '</tr></thead>' +
         '<tbody>' + itemRows + '</tbody>' +
       '</table></div>' +
     '</details>' +
+    // Tabla costos globales (solo si existen)
+    (globalCostos.length
+      ? '<div class="tbl-wrap" style="margin-top:.75rem"><table>' +
+          '<thead><tr>' +
+            summaryTH('Costos Globales', false) +
+            summaryTH('Total COP', monRFQ === 'COP') +
+            summaryTH('Total USD', monRFQ === 'USD') +
+            summaryTH('Total EUR', monRFQ === 'EUR') +
+            '<th>' + monRFQ + '/Kg</th><th>' + monRFQ + '/Und</th>' +
+          '</tr></thead>' +
+          '<tbody>' + globalRows + '</tbody>' +
+        '</table></div>'
+      : '') +
+    // Gran total
     '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:.75rem;margin-top:.75rem">' +
-      summaryCard('Total COP', formatCOP(grandCOP), monRFQ === 'COP') +
-      summaryCard('Total USD', formatUSD(grandUSD), monRFQ === 'USD') +
-      summaryCard('Total EUR', formatEUR(grandEUR), monRFQ === 'EUR') +
+      summaryCard('Gran Total COP', formatCOP(grandCOP), monRFQ === 'COP') +
+      summaryCard('Gran Total USD', formatUSD(grandUSD), monRFQ === 'USD') +
+      summaryCard('Gran Total EUR', formatEUR(grandEUR), monRFQ === 'EUR') +
     '</div>';
 }
 

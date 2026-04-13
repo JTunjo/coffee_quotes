@@ -632,27 +632,113 @@ function resetEditor() {
 
 // ── Costos manuales ───────────────────────────────────────
 
-function addManualCost() {
-  var nombre = document.getElementById('new-costo-nombre').value.trim();
-  var itemId = document.getElementById('new-costo-item').value.trim();
+// Muestra/oculta campos condicionales según si se ingresó item_id
+function onCostoItemChange(input) {
+  var itemId      = (input.value || '').trim();
+  var itemFields  = document.getElementById('costo-item-fields');
+  var globalField = document.getElementById('costo-global-field');
+  if (itemId) {
+    itemFields.classList.remove('hidden');
+    globalField.classList.add('hidden');
+    onCostoPorChange();
+  } else {
+    itemFields.classList.add('hidden');
+    globalField.classList.remove('hidden');
+  }
+}
+
+function onCostoPorChange() {
+  var por      = document.getElementById('new-costo-por').value;
+  var lblValor = document.getElementById('new-costo-valor-label');
+  var lblCalc  = document.getElementById('new-costo-calc-label');
+  lblValor.textContent = por === 'kg' ? 'Valor/Kg' : 'Valor/Und';
+  lblCalc.textContent  = por === 'kg' ? 'Valor/Und (calculado)' : 'Valor/Kg (calculado)';
+  onCostoValorChange();
+}
+
+function onCostoValorChange() {
+  var itemId = (document.getElementById('new-costo-item').value || '').trim();
+  if (!itemId || !cotState) return;
+  var itemFound = cotState.items.filter(function(i) { return i.cot_item_id === itemId; })[0];
+  if (!itemFound) return;
+  var factor = factorPresentacion(itemFound.presentacion, itemFound.cantidad_unidades);
+  var por    = document.getElementById('new-costo-por').value;
   var valor  = parseFloat(document.getElementById('new-costo-valor').value || 0);
-  var moneda = document.getElementById('new-costo-moneda').value;
-  var tipo   = document.getElementById('new-costo-tipo').value;
+  var calc   = document.getElementById('new-costo-calc');
+  calc.value = por === 'kg'
+    ? (valor * factor).toFixed(4)
+    : (factor > 0 ? (valor / factor).toFixed(4) : '0');
+}
+
+function addManualCost() {
+  var nombre   = document.getElementById('new-costo-nombre').value.trim();
+  var itemId   = document.getElementById('new-costo-item').value.trim();
+  var moneda   = document.getElementById('new-costo-moneda').value;
+  var tipo     = document.getElementById('new-costo-tipo').value;
+  var incoterm = document.getElementById('new-costo-incoterm').value.trim();
 
   if (!nombre) return toast('⚠️ El nombre del costo es requerido');
 
-  pendingNew.push({
-    nombre:      nombre,
-    tipo:        tipo,
-    moneda:      moneda,
-    valor_kg:    valor,
-    cot_item_id: itemId,
-  });
+  var costEntry;
 
-  // Limpiar campos
-  document.getElementById('new-costo-nombre').value = '';
-  document.getElementById('new-costo-item').value   = '';
-  document.getElementById('new-costo-valor').value  = '';
+  if (itemId) {
+    if (!cotState || !cotState.items) return toast('⚠️ No hay cotización cargada');
+    var itemFound = cotState.items.filter(function(i) { return i.cot_item_id === itemId; })[0];
+    if (!itemFound) {
+      toast('⚠️ ID de ítem no encontrado en esta cotización');
+      return;
+    }
+    var por    = document.getElementById('new-costo-por').value;
+    var valor  = parseFloat(document.getElementById('new-costo-valor').value || 0);
+    var factor = factorPresentacion(itemFound.presentacion, itemFound.cantidad_unidades);
+    var cant   = parseFloat(itemFound.cantidad_unidades || 0);
+    var valorKg, valorUnd;
+    if (por === 'kg') {
+      valorKg  = valor;
+      valorUnd = valor * factor;
+    } else {
+      valorUnd = valor;
+      valorKg  = factor > 0 ? valor / factor : 0;
+    }
+    var tUSD   = parseFloat(tasaUSD || 0);
+    var tEUR   = parseFloat(tasaEUR || 0);
+    var vCOP   = aCOP(valorKg, moneda, tUSD, tEUR);
+    var totCOP = itemFound.presentacion === 'Granel' ? vCOP * factor : vCOP * factor * cant;
+    costEntry = {
+      nombre:      nombre,
+      tipo:        tipo,
+      incoterm:    incoterm,
+      moneda:      moneda,
+      cot_item_id: itemId,
+      valor_kg:    valorKg,
+      valor_und:   valorUnd,
+      valor_total: totCOP,
+      es_global:   false,
+    };
+  } else {
+    var valorTotal = parseFloat(document.getElementById('new-costo-valor-global').value || 0);
+    costEntry = {
+      nombre:      nombre,
+      tipo:        tipo,
+      incoterm:    incoterm,
+      moneda:      moneda,
+      cot_item_id: '',
+      valor_kg:    0,
+      valor_und:   0,
+      valor_total: valorTotal,
+      es_global:   true,
+    };
+  }
+
+  pendingNew.push(costEntry);
+
+  document.getElementById('new-costo-nombre').value        = '';
+  document.getElementById('new-costo-item').value          = '';
+  document.getElementById('new-costo-incoterm').value      = '';
+  document.getElementById('new-costo-valor').value         = '';
+  document.getElementById('new-costo-calc').value          = '';
+  document.getElementById('new-costo-valor-global').value  = '';
+  onCostoItemChange(document.getElementById('new-costo-item'));
 
   renderPendingCostos();
   toast('✅ Costo "' + nombre + '" agregado a la lista');
@@ -682,13 +768,54 @@ function renderPendingCostos() {
       '<tr>' +
         '<td>' + c.nombre + '</td>' +
         '<td><span class="tag tag-blue">' + c.tipo + '</span></td>' +
+        '<td>' + (c.incoterm || '—') + '</td>' +
         '<td><span class="tag tag-yellow">' + c.moneda + '</span></td>' +
-        '<td>' + (c.valor_kg || 0).toLocaleString('es-CO') + '</td>' +
-        '<td style="font-size:.75rem;color:var(--muted)">' + (c.cot_item_id || 'Global') + '</td>' +
+        '<td style="font-size:.75rem;color:var(--muted)">' + (c.cot_item_id || '<em>Global</em>') + '</td>' +
+        '<td>' + (c.es_global ? '—' : parseFloat(c.valor_kg  || 0).toFixed(2)) + '</td>' +
+        '<td>' + (c.es_global ? '—' : parseFloat(c.valor_und || 0).toFixed(2)) + '</td>' +
+        '<td>' + parseFloat(c.valor_total || 0).toLocaleString('es-CO') + '</td>' +
         '<td><button class="btn btn-danger btn-sm" onclick="removePendingCosto(' + i + ')">✕</button></td>' +
       '</tr>';
   }
   body.innerHTML = rows;
+}
+
+// ── Ignorar ítem ──────────────────────────────────────────
+
+async function toggleIgnorarItem(checkbox, cotItemId) {
+  var ignorado = checkbox.checked;
+  var card = checkbox.closest('.card');
+  if (card) card.style.opacity = ignorado ? '0.55' : '1';
+
+  var res = await apiPost({
+    action:      'marcarItemIgnorado',
+    cot_item_id: cotItemId,
+    ignorado:    ignorado,
+  });
+
+  if (!res.ok) {
+    checkbox.checked = !ignorado;
+    if (card) card.style.opacity = !ignorado ? '0.55' : '1';
+    return toast('❌ Error al actualizar: ' + (res.error || ''));
+  }
+
+  // Recalcular estado del botón imprimir
+  var hayIncompletos = false;
+  document.querySelectorAll('.card[data-cot-item-id]').forEach(function(c) {
+    var cb  = c.querySelector('input[type="checkbox"]');
+    var isIgn = cb && cb.checked;
+    if (!isIgn && c.style.border && c.style.border.indexOf('red') !== -1) {
+      hayIncompletos = true;
+    }
+  });
+  var btnImprimir = document.getElementById('btn-imprimir');
+  if (btnImprimir) {
+    btnImprimir.disabled = hayIncompletos;
+    btnImprimir.title = hayIncompletos
+      ? 'Resuelve o ignora los ítems sin disponibilidad para imprimir'
+      : 'Imprimir cotización';
+  }
+  toast(ignorado ? '⚠️ Ítem ignorado' : '✅ Ítem incluido');
 }
 
 // ══════════════════════════════════════════════════════════

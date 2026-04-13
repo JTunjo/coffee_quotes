@@ -185,20 +185,11 @@
 
       <div id="seccion-costo-manual" class="card">
         <div class="card-title">➕ Agregar Costo Manual</div>
-        <div class="form-grid">
+
+        <!-- Fila 1: campos fijos -->
+        <div class="form-grid" style="margin-bottom:.6rem">
           <div><label>Nombre del costo</label>
             <input id="new-costo-nombre" placeholder="Ej. Seguro exportación" /></div>
-          <div><label>Item (cot_item_id)</label>
-            <input id="new-costo-item" placeholder="Opcional — dejar vacío si es global" /></div>
-          <div><label>Valor/kg</label>
-            <input id="new-costo-valor" type="number" step="0.01" placeholder="0.00" /></div>
-          <div><label>Moneda</label>
-            <select id="new-costo-moneda">
-              <option value="COP">COP</option>
-              <option value="USD">USD</option>
-              <option value="EUR">EUR</option>
-            </select>
-          </div>
           <div><label>Tipo</label>
             <select id="new-costo-tipo">
               <option value="manual">Manual</option>
@@ -206,8 +197,54 @@
               <option value="financiero">Financiero</option>
             </select>
           </div>
+          <div><label>Incoterm</label>
+            <input id="new-costo-incoterm" placeholder="Ej. FOB, CIF…" /></div>
+          <div><label>Moneda</label>
+            <select id="new-costo-moneda">
+              <option value="COP">COP</option>
+              <option value="USD">USD</option>
+              <option value="EUR">EUR</option>
+            </select>
+          </div>
+          <div>
+            <label>Item (cot_item_id)</label>
+            <input id="new-costo-item"
+              placeholder="Dejar vacío para costo global"
+              oninput="onCostoItemChange(this)" />
+          </div>
         </div>
-        <button class="btn btn-ghost mt-1 btn-sm" onclick="addManualCost()">+ Agregar a lista</button>
+
+        <!-- Campos condicionales: ítem específico -->
+        <div id="costo-item-fields" class="form-grid hidden" style="margin-bottom:.6rem;
+          background:#f0ebe3;border:1px solid var(--border);border-radius:var(--radius);padding:.6rem">
+          <div>
+            <label>Costo por</label>
+            <select id="new-costo-por" onchange="onCostoPorChange()">
+              <option value="kg">Por Kg</option>
+              <option value="unidad">Por Unidad</option>
+            </select>
+          </div>
+          <div>
+            <label id="new-costo-valor-label">Valor/Kg</label>
+            <input id="new-costo-valor" type="number" step="0.0001" placeholder="0.00"
+              oninput="onCostoValorChange()" />
+          </div>
+          <div>
+            <label id="new-costo-calc-label">Valor/Und (calculado)</label>
+            <input id="new-costo-calc" type="number" readonly
+              style="background:var(--bg);color:var(--muted)" />
+          </div>
+        </div>
+
+        <!-- Campo condicional: costo global -->
+        <div id="costo-global-field" class="form-grid" style="margin-bottom:.6rem">
+          <div>
+            <label>Valor total</label>
+            <input id="new-costo-valor-global" type="number" step="0.01" placeholder="0.00" />
+          </div>
+        </div>
+
+        <button class="btn btn-ghost btn-sm" onclick="addManualCost()">+ Agregar a lista</button>
 
         <!-- Lista de costos pendientes -->
         <div id="pending-costos-wrap" class="hidden" style="margin-top:1rem">
@@ -217,7 +254,8 @@
           <div class="tbl-wrap">
             <table>
               <thead><tr>
-                <th>Nombre</th><th>Tipo</th><th>Moneda</th><th>Valor/kg</th><th>Item</th><th></th>
+                <th>Nombre</th><th>Tipo</th><th>Incoterm</th><th>Moneda</th>
+                <th>Item</th><th>Valor/Kg</th><th>Valor/Und</th><th>Valor Total</th><th></th>
               </tr></thead>
               <tbody id="pending-costos-body"></tbody>
             </table>
