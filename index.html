@@ -75,6 +75,12 @@
   #result-popup.show { display: flex; }
   .popup-box { background: var(--surface); border-radius: var(--radius); box-shadow: 0 8px 32px rgba(0,0,0,.18); padding: 2rem 2.5rem; max-width: 480px; width: 90%; text-align: center; position: relative; animation: popIn .25s ease; }
   @keyframes popIn { from { transform: scale(.85); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .cot-loading { display: flex; flex-direction: column; align-items: center; gap: 1rem; padding: 3rem; color: var(--muted); font-size: .9rem; }
+  .cot-loading .spinner-ring { width: 40px; height: 40px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }
+  .skel-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.5rem; margin-bottom: 1.5rem; }
+  .skel-line { height: 12px; border-radius: 4px; background: linear-gradient(90deg, var(--border) 25%, var(--bg) 50%, var(--border) 75%); background-size: 200% 100%; animation: shimmer 1.4s infinite; margin-bottom: .75rem; }
+  @keyframes shimmer { to { background-position: -200% 0; } }
   .popup-icon  { font-size: 3rem; margin-bottom: .75rem; }
   .popup-title { font-size: 1.1rem; font-weight: 700; margin-bottom: .5rem; }
   .popup-msg   { font-size: .88rem; color: var(--muted); line-height: 1.6; text-align: left; }
@@ -170,6 +176,15 @@
         <input id="cot-search-id" placeholder="ID de cotización" style="max-width:340px" />
         <button class="btn btn-secondary" onclick="loadCotizacion()">Cargar</button>
       </div>
+    </div>
+
+    <div id="cot-loading" class="hidden">
+      <div class="cot-loading">
+        <div class="spinner-ring"></div>
+        <span id="cot-loading-msg">Cargando cotización...</span>
+      </div>
+      <div class="skel-card"><div class="skel-line" style="width:40%"></div><div class="skel-line" style="width:70%"></div><div class="skel-line" style="width:55%"></div></div>
+      <div class="skel-card"><div class="skel-line" style="width:60%"></div><div class="skel-line" style="width:85%"></div><div class="skel-line" style="width:45%"></div><div class="skel-line" style="width:75%"></div></div>
     </div>
 
     <div id="cot-editor" class="hidden">

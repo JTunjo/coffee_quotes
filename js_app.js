@@ -28,6 +28,26 @@ var pendingComisiones = {}; // { "cot_item_id_tasa_id": { cot_item_id, tasa_id, 
 var variedades      = [];
 var tasaUSD         = 0;
 var tasaEUR         = 0;
+var tasasCache      = null;
+
+var _TASAS_KEY = 'cf_tasas_v1';
+var _TASAS_TTL = 3600000; // 1 hour
+
+function _preloadTasas() {
+  try {
+    var raw = sessionStorage.getItem(_TASAS_KEY);
+    if (raw) {
+      var parsed = JSON.parse(raw);
+      if (Date.now() - parsed.ts < _TASAS_TTL) { tasasCache = parsed.data; return; }
+    }
+  } catch(e) {}
+  apiGet({ action: 'getTasas' }).then(function(res) {
+    if (res && res.ok && res.tasas) {
+      tasasCache = res.tasas;
+      try { sessionStorage.setItem(_TASAS_KEY, JSON.stringify({ ts: Date.now(), data: res.tasas })); } catch(e) {}
+    }
+  }).catch(function() {});
+}
 
 // ══════════════════════════════════════════════════════════
 //  EDITAR RFQ — popup
@@ -500,48 +520,71 @@ async function loadCotizacion(cotId) {
   cotId = cotId || document.getElementById('cot-search-id').value.trim();
   if (!cotId) return toast('⚠️ Ingresa un ID de cotización');
 
-  toast('⏳ Cargando...');
-  var res = await apiGet({ action: 'getCotizacion', cotizacionId: cotId });
-  if (!res.ok) return toast('❌ ' + res.error);
+  var loadingEl = document.getElementById('cot-loading');
+  var editorEl  = document.getElementById('cot-editor');
+  loadingEl.classList.remove('hidden');
+  editorEl.classList.add('hidden');
 
-  currentCotId      = cotId;
-  cotState          = res;
-  cotState.rfqItems = res.rfqItems || [];
-  tasaUSD           = parseFloat(res.cotizacion.tasa_usd || 0);
-  tasaEUR           = parseFloat(res.cotizacion.tasa_eur || 0);
-  pendingEdits      = {};
-  pendingNew        = [];
-
-  var enviado = (res.cotizacion.estado || '').toLowerCase() === 'enviado';
-  renderCotizacion(res, enviado);
-  document.getElementById('cot-editor').classList.remove('hidden');
-  document.getElementById('seccion-costo-manual').classList.toggle('hidden', enviado);
-  document.getElementById('botones-cotizacion').classList.toggle('hidden', enviado);
-  document.getElementById('btn-imprimir').disabled = false;
-
-  if (enviado) {
-    toast('✅ Cotización enviada — solo lectura');
-    return;
+  function setLoadingMsg(msg) {
+    document.getElementById('cot-loading-msg').textContent = msg;
   }
 
-  toast('⏳ Verificando disponibilidad...');
-  var vRes = await apiGet({ action: 'verificarDisponibilidad', cotizacionId: cotId });
-  if (!vRes.ok) { toast('❌ Error al verificar disponibilidad'); return; }
+  try {
+    setLoadingMsg('Cargando cotización...');
+    var res = await apiGet({ action: 'getCotizacion', cotizacionId: cotId });
+    if (!res.ok) { toast('❌ ' + res.error); return; }
 
-  var res2 = await apiGet({ action: 'getCotizacion', cotizacionId: cotId });
-  if (res2.ok) {
-    cotState          = res2;
-    cotState.rfqItems = res2.rfqItems || [];
-    renderCotizacion(res2, false, vRes.resultados);
+    // Cache tasas from response; fall back to pre-warmed cache
+    if (res.tasas && res.tasas.length) {
+      tasasCache = res.tasas;
+      try { sessionStorage.setItem(_TASAS_KEY, JSON.stringify({ ts: Date.now(), data: res.tasas })); } catch(e) {}
+    } else if (tasasCache) {
+      res.tasas = tasasCache;
+    }
+
+    currentCotId      = cotId;
+    cotState          = res;
+    cotState.rfqItems = res.rfqItems || [];
+    tasaUSD           = parseFloat(res.cotizacion.tasa_usd || 0);
+    tasaEUR           = parseFloat(res.cotizacion.tasa_eur || 0);
+    pendingEdits      = {};
+    pendingNew        = [];
+
+    var enviado = (res.cotizacion.estado || '').toLowerCase() === 'enviado';
+    renderCotizacion(res, enviado);
+    editorEl.classList.remove('hidden');
+    document.getElementById('seccion-costo-manual').classList.toggle('hidden', enviado);
+    document.getElementById('botones-cotizacion').classList.toggle('hidden', enviado);
+    document.getElementById('btn-imprimir').disabled = false;
+
+    if (enviado) {
+      toast('✅ Cotización enviada — solo lectura');
+      return;
+    }
+
+    setLoadingMsg('Verificando disponibilidad...');
+    var vRes = await apiGet({ action: 'verificarDisponibilidad', cotizacionId: cotId });
+    if (!vRes.ok) { toast('❌ Error al verificar disponibilidad'); return; }
+
+    setLoadingMsg('Actualizando datos...');
+    var res2 = await apiGet({ action: 'getCotizacion', cotizacionId: cotId });
+    if (res2.ok) {
+      if (!res2.tasas || !res2.tasas.length) res2.tasas = tasasCache || [];
+      cotState          = res2;
+      cotState.rfqItems = res2.rfqItems || [];
+      renderCotizacion(res2, false, vRes.resultados);
+    }
+
+    renderDisponibilidadBanner(vRes.resultados);
+    document.getElementById('btn-imprimir').disabled = vRes.hay_incompletos;
+    document.getElementById('btn-imprimir').title = vRes.hay_incompletos
+      ? 'Resuelve los ítems sin disponibilidad para imprimir'
+      : 'Imprimir cotización';
+
+    toast('✅ Cotización lista');
+  } finally {
+    loadingEl.classList.add('hidden');
   }
-
-  renderDisponibilidadBanner(vRes.resultados);
-  document.getElementById('btn-imprimir').disabled = vRes.hay_incompletos;
-  document.getElementById('btn-imprimir').title = vRes.hay_incompletos
-    ? 'Resuelve los ítems sin disponibilidad para imprimir'
-    : 'Imprimir cotización';
-
-  toast('✅ Cotización lista');
 }
 
 // Llamado al cambiar tasa en el encabezado
@@ -854,21 +897,20 @@ async function toggleIgnorarItem(checkbox, cotItemId) {
 //  Init
 // ══════════════════════════════════════════════════════════
 
-async function init() {
+function init() {
   document.getElementById('rfq-fecha').value = new Date().toISOString().slice(0, 10);
-  try {
-    var res = await apiGet({ action: 'getVariedades' });
-    console.log('[init] getVariedades →', res);
+  addRfqItem(); // render form immediately, no API wait
+
+  // Load variedades in background — updates dropdowns when ready
+  apiGet({ action: 'getVariedades' }).then(function(res) {
     if (res && res.ok && res.variedades && res.variedades.length) {
       variedades = res.variedades.map(function(v) { return String(v.nombre).trim(); });
-      console.log('[init] variedades cargadas:', variedades);
-    } else {
-      console.warn('[init] No se cargaron variedades:', res);
+      refreshVariedadSelects();
     }
-  } catch(e) {
-    console.error('[init] Error:', e);
-  }
-  addRfqItem();
+  }).catch(function(e) { console.error('[init] variedades:', e); });
+
+  // Pre-warm tasas cache in background
+  _preloadTasas();
 }
 
 document.addEventListener('DOMContentLoaded', init);
