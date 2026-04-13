@@ -595,7 +595,16 @@ async function loadCotizacion(cotId) {
 function onTasaChange() {
   tasaUSD = parseFloat(document.getElementById('tasa-usd').value || 0);
   tasaEUR = parseFloat(document.getElementById('tasa-eur').value || 0);
-  if (cotState) renderSummaryFromState();
+  if (!cotState) return;
+  cotState.items.forEach(function(item) {
+    recalcItemUI(
+      item.cot_item_id,
+      parseFloat(item.costo_lote_kg || 0),
+      parseFloat(item.cantidad_unidades || 0),
+      item.presentacion
+    );
+  });
+  renderSummaryFromState();
 }
 
 async function saveCotizacion() {
