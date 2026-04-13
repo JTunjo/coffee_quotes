@@ -92,6 +92,27 @@ function updateRows(name, predicate, updater) {
   return updated;
 }
 
+// Like updateRows but updater(obj) returns merged obj or null to skip.
+// Does ONE sheet read + ONE write regardless of how many rows match.
+function bulkUpdateRows(name, updater) {
+  var sh      = getSheet(name);
+  var data    = sh.getDataRange().getValues();
+  var headers = data[0].map(function(h) { return String(h).trim(); });
+  var updated = 0;
+  for (var i = 1; i < data.length; i++) {
+    var obj = {};
+    for (var j = 0; j < headers.length; j++) { obj[headers[j]] = data[i][j]; }
+    var newObj = updater(obj);
+    if (!newObj) continue;
+    for (var j = 0; j < headers.length; j++) {
+      if (newObj[headers[j]] !== undefined) data[i][j] = newObj[headers[j]];
+    }
+    updated++;
+  }
+  if (updated > 0) sh.getDataRange().setValues(data);
+  return updated;
+}
+
 function mergeObj(base, overrides) {
   var result = {};
   for (var k in base)      { if (base.hasOwnProperty(k))      result[k] = base[k]; }
@@ -861,21 +882,18 @@ function guardarCotizacion(body) {
   var costosActuales = filterArr(sheetToObjects(SHEETS.COTIZACION_COSTOS),
     function(c) { return c.cotizacion_id === cotizacion_id; });
 
+  // Build change map and historial entries without touching the sheet yet
+  var costosChangeMap = {};
+  var historialEntries = [];
   for (var i = 0; i < costos.length; i++) {
     var edit   = costos[i];
     var actual = findOne(costosActuales, function(c) { return c.costo_id === edit.costo_id; });
     if (!actual) continue;
-
     var valorAnterior = parseFloat(actual.valor_kg || 0);
     var valorNuevo    = parseFloat(edit.valor_kg   || 0);
     if (valorAnterior === valorNuevo) continue;
-
-    updateRows(SHEETS.COTIZACION_COSTOS,
-      function(r) { return r.costo_id === edit.costo_id; },
-      function(r) { return mergeObj(r, { valor_kg: valorNuevo, updated_at: timestamp }); }
-    );
-
-    appendRow(SHEETS.COTIZACION_COSTOS_HISTORIAL, {
+    costosChangeMap[edit.costo_id] = { valor_kg: valorNuevo, updated_at: timestamp };
+    historialEntries.push({
       historial_id:   uid(),
       cotizacion_id:  cotizacion_id,
       cot_item_id:    actual.cot_item_id,
@@ -887,6 +905,15 @@ function guardarCotizacion(body) {
       timestamp:      timestamp,
       usuario:        usuario,
     });
+  }
+  // Single read-modify-write for all changed costs
+  if (historialEntries.length > 0) {
+    bulkUpdateRows(SHEETS.COTIZACION_COSTOS, function(r) {
+      return costosChangeMap[r.costo_id] || null;
+    });
+    for (var h = 0; h < historialEntries.length; h++) {
+      appendRow(SHEETS.COTIZACION_COSTOS_HISTORIAL, historialEntries[h]);
+    }
   }
 
   for (var i = 0; i < costos_nuevos.length; i++) {
@@ -929,29 +956,46 @@ function guardarCotizacion(body) {
 
   // ── Guardar overrides de comisiones/descuentos ──────────
   var comisiones = body.comisiones || [];
-  for (var ci = 0; ci < comisiones.length; ci++) {
-    var com      = comisiones[ci];
-    var _ctRows  = SS.getSheetByName(SHEETS.COTIZACION_TASAS) ? sheetToObjects(SHEETS.COTIZACION_TASAS) : [];
-    var existing = findOne(_ctRows, function(r) {
-      return r.cotizacion_id === cotizacion_id
-          && String(r.cot_item_id) === String(com.cot_item_id)
-          && String(r.tasa_id)    === String(com.tasa_id);
-    });
-    if (existing) {
-      updateRows(SHEETS.COTIZACION_TASAS,
-        function(r) { return r.cotizacion_tasa_id === existing.cotizacion_tasa_id; },
-        function(r) { return mergeObj(r, { tasa_valor: parseFloat(com.tasa_valor || 0), updated_at: timestamp }); }
-      );
-    } else {
-      appendRow(SHEETS.COTIZACION_TASAS, {
-        cotizacion_tasa_id: uid(),
-        cotizacion_id:      cotizacion_id,
-        cot_item_id:        com.cot_item_id || '',
-        tasa_id:            com.tasa_id,
-        tasa_valor:         parseFloat(com.tasa_valor || 0),
-        created_at:         timestamp,
-        updated_at:         timestamp,
+  if (comisiones.length > 0) {
+    // Read sheet once before the loop
+    var _ctRows = SS.getSheetByName(SHEETS.COTIZACION_TASAS)
+      ? sheetToObjects(SHEETS.COTIZACION_TASAS) : [];
+
+    var comisionesChangeMap = {};
+    var comisionesNuevas    = [];
+
+    for (var ci = 0; ci < comisiones.length; ci++) {
+      var com      = comisiones[ci];
+      var existing = findOne(_ctRows, function(r) {
+        return r.cotizacion_id === cotizacion_id
+            && String(r.cot_item_id) === String(com.cot_item_id)
+            && String(r.tasa_id)    === String(com.tasa_id);
       });
+      if (existing) {
+        comisionesChangeMap[existing.cotizacion_tasa_id] = {
+          tasa_valor: parseFloat(com.tasa_valor || 0),
+          updated_at: timestamp,
+        };
+      } else {
+        comisionesNuevas.push({
+          cotizacion_tasa_id: uid(),
+          cotizacion_id:      cotizacion_id,
+          cot_item_id:        com.cot_item_id || '',
+          tasa_id:            com.tasa_id,
+          tasa_valor:         parseFloat(com.tasa_valor || 0),
+          created_at:         timestamp,
+          updated_at:         timestamp,
+        });
+      }
+    }
+    // Single write for all updates
+    if (Object.keys(comisionesChangeMap).length > 0) {
+      bulkUpdateRows(SHEETS.COTIZACION_TASAS, function(r) {
+        return comisionesChangeMap[r.cotizacion_tasa_id] || null;
+      });
+    }
+    for (var cn = 0; cn < comisionesNuevas.length; cn++) {
+      appendRow(SHEETS.COTIZACION_TASAS, comisionesNuevas[cn]);
     }
   }
 
@@ -1007,6 +1051,8 @@ function recalcularTotales(cotizacion_id) {
   var costos = filterArr(sheetToObjects(SHEETS.COTIZACION_COSTOS),
     function(c) { return c.cotizacion_id === cotizacion_id; });
 
+  // Compute all item updates first, then write once
+  var itemUpdatesMap = {};
   for (var i = 0; i < items.length; i++) {
     var item = items[i];
 
@@ -1022,18 +1068,18 @@ function recalcularTotales(cotizacion_id) {
     var factor          = factorPresentacion(item.presentacion, item.cantidad_unidades);
     var precio_unitario = precio_final_kg * factor;
     var total_cop       = item.presentacion === 'Granel' ? precio_unitario : precio_unitario * cantidad;
-    var total_usd       = tasa_usd > 0 ? total_cop / tasa_usd : 0;
-    var total_eur       = tasa_eur > 0 ? total_cop / tasa_eur : 0;
 
-    updateRows(SHEETS.COTIZACION_ITEMS,
-      function(r) { return r.cot_item_id === item.cot_item_id; },
-      function(r) { return mergeObj(r, {
-        precio_final_kg: precio_final_kg,
-        precio_unitario: precio_unitario,
-        total_cop:       total_cop,
-        total_usd:       total_usd,
-        total_eur:       total_eur,
-      }); }
-    );
+    itemUpdatesMap[item.cot_item_id] = {
+      precio_final_kg: precio_final_kg,
+      precio_unitario: precio_unitario,
+      total_cop:       total_cop,
+      total_usd:       tasa_usd > 0 ? total_cop / tasa_usd : 0,
+      total_eur:       tasa_eur > 0 ? total_cop / tasa_eur : 0,
+    };
   }
+
+  // Single read-modify-write for all items
+  bulkUpdateRows(SHEETS.COTIZACION_ITEMS, function(r) {
+    return itemUpdatesMap[r.cot_item_id] || null;
+  });
 }
