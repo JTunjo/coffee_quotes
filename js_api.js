@@ -18,7 +18,7 @@ function jsonp(params) {
     var timer = setTimeout(function() {
       cleanup();
       reject(new Error('Timeout: el servidor no respondió'));
-    }, 15000);
+    }, 35000);
 
     function cleanup() {
       delete window[cbName];

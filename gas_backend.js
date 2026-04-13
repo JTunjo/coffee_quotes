@@ -708,7 +708,9 @@ function getCotizacion(cotizacionId) {
   });
 
   var tasas      = sheetToObjects(SHEETS.TASAS);
-  var comisiones = filterArr(sheetToObjects(SHEETS.COTIZACION_TASAS),
+  var allComisiones = SS.getSheetByName(SHEETS.COTIZACION_TASAS)
+    ? sheetToObjects(SHEETS.COTIZACION_TASAS) : [];
+  var comisiones = filterArr(allComisiones,
     function(r) { return r.cotizacion_id === cotizacionId; });
 
   return { ok: true, cotizacion: cots[0], items: cotItems,
@@ -929,7 +931,8 @@ function guardarCotizacion(body) {
   var comisiones = body.comisiones || [];
   for (var ci = 0; ci < comisiones.length; ci++) {
     var com      = comisiones[ci];
-    var existing = findOne(sheetToObjects(SHEETS.COTIZACION_TASAS), function(r) {
+    var _ctRows  = SS.getSheetByName(SHEETS.COTIZACION_TASAS) ? sheetToObjects(SHEETS.COTIZACION_TASAS) : [];
+    var existing = findOne(_ctRows, function(r) {
       return r.cotizacion_id === cotizacion_id
           && String(r.cot_item_id) === String(com.cot_item_id)
           && String(r.tasa_id)    === String(com.tasa_id);
