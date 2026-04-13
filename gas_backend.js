@@ -10,6 +10,7 @@ var SHEETS = {
   DIRECTORIO:                  'Directorio',
   DISPONIBILIDADES:            'Disponibilidades',
   COSTOS_ESTANDAR:             'Costos_estandar',
+  TASAS:                       'Tasas',
   RFQ:                         'RFQ',
   RFQ_ITEMS:                   'RFQ_items',
   RFQ_TRAZA:                   'RFQ_traza',
@@ -17,6 +18,7 @@ var SHEETS = {
   COTIZACION_ITEMS:            'Cotizacion_items',
   COTIZACION_COSTOS:           'Cotizacion_costos',
   COTIZACION_COSTOS_HISTORIAL: 'Cotizacion_costos_historial',
+  COTIZACION_TASAS:            'Cotizacion_tasas',
 };
 
 // ── Helpers generales ─────────────────────────────────────
@@ -188,6 +190,7 @@ function doGet(e) {
       else if (action === 'getCostosEstandar')       result = getCostosEstandar();
       else if (action === 'listRFQs')                result = listRFQs();
       else if (action === 'verificarDisponibilidad') result = verificarDisponibilidad(p.cotizacionId);
+      else if (action === 'getTasas')                result = getTasas();
       else result = { ok: false, error: 'Accion desconocida: ' + action };
     }
 
@@ -559,6 +562,7 @@ function forkCotizacion(body) {
         tipo:          c.tipo || 'estandar',
         moneda:        'COP',
         valor_kg:      parseFloat(c.valor_usd_kg || 0),
+        incoterm_id:   parseFloat(c.incoterm_max  || 0),
         editable:      true,
         created_at:    timestamp,
         updated_at:    timestamp,
@@ -710,8 +714,13 @@ function getCotizacion(cotizacionId) {
     return false;
   });
 
+  var tasas      = sheetToObjects(SHEETS.TASAS);
+  var comisiones = filterArr(sheetToObjects(SHEETS.COTIZACION_TASAS),
+    function(r) { return r.cotizacion_id === cotizacionId; });
+
   return { ok: true, cotizacion: cots[0], items: cotItems,
-           costos: costos, rfqItems: rfqItems };
+           costos: costos, rfqItems: rfqItems,
+           tasas: tasas, comisiones: comisiones };
 }
 
 // ── Crear RFQ ─────────────────────────────────────────────
@@ -800,6 +809,7 @@ function crearRFQ(body) {
         tipo:          c.tipo || 'estandar',
         moneda:        'COP',
         valor_kg:      parseFloat(c.valor_usd_kg || 0),
+        incoterm_id:   parseFloat(c.incoterm_max  || 0),
         editable:      true,
         created_at:    timestamp,
         updated_at:    timestamp,
@@ -897,7 +907,8 @@ function guardarCotizacion(body) {
       nombre:        nuevo.nombre      || 'Costo adicional',
       tipo:          nuevo.tipo        || 'manual',
       moneda:        moneda,
-      valor_kg:      parseFloat(nuevo.valor_kg || 0),
+      valor_kg:      parseFloat(nuevo.valor_kg   || 0),
+      incoterm_id:   parseFloat(nuevo.incoterm_id || 0),
       editable:      true,
       created_at:    timestamp,
       updated_at:    timestamp,
@@ -922,6 +933,33 @@ function guardarCotizacion(body) {
     _guardarPerfil(perfiles[p].cot_item_id, perfiles[p].perfil_sensorial);
   }
 
+  // ── Guardar overrides de comisiones/descuentos ──────────
+  var comisiones = body.comisiones || [];
+  for (var ci = 0; ci < comisiones.length; ci++) {
+    var com      = comisiones[ci];
+    var existing = findOne(sheetToObjects(SHEETS.COTIZACION_TASAS), function(r) {
+      return r.cotizacion_id === cotizacion_id
+          && String(r.cot_item_id) === String(com.cot_item_id)
+          && String(r.tasa_id)    === String(com.tasa_id);
+    });
+    if (existing) {
+      updateRows(SHEETS.COTIZACION_TASAS,
+        function(r) { return r.cotizacion_tasa_id === existing.cotizacion_tasa_id; },
+        function(r) { return mergeObj(r, { tasa_valor: parseFloat(com.tasa_valor || 0), updated_at: timestamp }); }
+      );
+    } else {
+      appendRow(SHEETS.COTIZACION_TASAS, {
+        cotizacion_tasa_id: uid(),
+        cotizacion_id:      cotizacion_id,
+        cot_item_id:        com.cot_item_id || '',
+        tasa_id:            com.tasa_id,
+        tasa_valor:         parseFloat(com.tasa_valor || 0),
+        created_at:         timestamp,
+        updated_at:         timestamp,
+      });
+    }
+  }
+
   recalcularTotales(cotizacion_id);
 
   updateRows(SHEETS.COTIZACIONES,
@@ -930,6 +968,12 @@ function guardarCotizacion(body) {
   );
 
   return { ok: true, cotizacion_id: cotizacion_id };
+}
+
+// ── Tasas de comisiones / descuentos ──────────────────────
+
+function getTasas() {
+  return { ok: true, tasas: sheetToObjects(SHEETS.TASAS) };
 }
 
 // ── Guardar tasas ─────────────────────────────────────────

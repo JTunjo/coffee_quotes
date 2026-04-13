@@ -19,14 +19,15 @@ function showPage(p) {
 }
 
 
-var rfqItemCount = 0;
-var currentCotId = null;
-var cotState     = null;
-var pendingEdits = {};
-var pendingNew   = [];
-var variedades   = [];
-var tasaUSD      = 0;
-var tasaEUR      = 0;
+var rfqItemCount    = 0;
+var currentCotId    = null;
+var cotState        = null;
+var pendingEdits    = {};
+var pendingNew      = [];
+var pendingComisiones = {}; // { "cot_item_id_tasa_id": { cot_item_id, tasa_id, tasa_valor } }
+var variedades      = [];
+var tasaUSD         = 0;
+var tasaEUR         = 0;
 
 // ══════════════════════════════════════════════════════════
 //  EDITAR RFQ — popup
@@ -587,8 +588,10 @@ async function saveCotizacion() {
 
   var tasaUSDActual  = parseFloat(cotState.cotizacion.tasa_usd || 0);
   var tasaEURActual  = parseFloat(cotState.cotizacion.tasa_eur || 0);
+  var comisionesPendientes = Object.values(pendingComisiones);
   var sinCambios = !costos.length && !costos_nuevos.length &&
                    !lotesCambiados.length && !perfiles.length &&
+                   !comisionesPendientes.length &&
                    tasaUSD === tasaUSDActual && tasaEUR === tasaEURActual;
   if (sinCambios) return toast('ℹ️ Sin cambios que guardar');
 
@@ -612,20 +615,23 @@ async function saveCotizacion() {
     costos:        costos,
     costos_nuevos: costos_nuevos,
     perfiles:      perfiles,
+    comisiones:    comisionesPendientes,
   });
 
   if (!res.ok) return toast('❌ Error: ' + res.error);
 
   toast('✅ Cotización guardada');
-  pendingEdits = {};
-  pendingNew   = [];
+  pendingEdits      = {};
+  pendingNew        = [];
+  pendingComisiones = {};
   renderPendingCostos();
   await loadCotizacion(currentCotId);
 }
 
 function resetEditor() {
-  pendingEdits = {};
-  pendingNew   = [];
+  pendingEdits      = {};
+  pendingNew        = [];
+  pendingComisiones = {};
   renderPendingCostos();
   if (currentCotId) loadCotizacion(currentCotId);
 }
@@ -675,7 +681,7 @@ function addManualCost() {
   var itemId   = document.getElementById('new-costo-item').value.trim();
   var moneda   = document.getElementById('new-costo-moneda').value;
   var tipo     = document.getElementById('new-costo-tipo').value;
-  var incoterm = document.getElementById('new-costo-incoterm').value.trim();
+  var incotermId = parseInt(document.getElementById('new-costo-incoterm').value || 0, 10);
 
   if (!nombre) return toast('⚠️ El nombre del costo es requerido');
 
@@ -705,28 +711,28 @@ function addManualCost() {
     var vCOP   = aCOP(valorKg, moneda, tUSD, tEUR);
     var totCOP = itemFound.presentacion === 'Granel' ? vCOP * factor : vCOP * factor * cant;
     costEntry = {
-      nombre:      nombre,
-      tipo:        tipo,
-      incoterm:    incoterm,
-      moneda:      moneda,
-      cot_item_id: itemId,
-      valor_kg:    valorKg,
-      valor_und:   valorUnd,
-      valor_total: totCOP,
-      es_global:   false,
+      nombre:       nombre,
+      tipo:         tipo,
+      incoterm_id:  incotermId,
+      moneda:       moneda,
+      cot_item_id:  itemId,
+      valor_kg:     valorKg,
+      valor_und:    valorUnd,
+      valor_total:  totCOP,
+      es_global:    false,
     };
   } else {
     var valorTotal = parseFloat(document.getElementById('new-costo-valor-global').value || 0);
     costEntry = {
-      nombre:      nombre,
-      tipo:        tipo,
-      incoterm:    incoterm,
-      moneda:      moneda,
-      cot_item_id: '',
-      valor_kg:    0,
-      valor_und:   0,
-      valor_total: valorTotal,
-      es_global:   true,
+      nombre:       nombre,
+      tipo:         tipo,
+      incoterm_id:  incotermId,
+      moneda:       moneda,
+      cot_item_id:  '',
+      valor_kg:     0,
+      valor_und:    0,
+      valor_total:  valorTotal,
+      es_global:    true,
     };
   }
 
@@ -734,7 +740,7 @@ function addManualCost() {
 
   document.getElementById('new-costo-nombre').value        = '';
   document.getElementById('new-costo-item').value          = '';
-  document.getElementById('new-costo-incoterm').value      = '';
+  document.getElementById('new-costo-incoterm').value      = '0';
   document.getElementById('new-costo-valor').value         = '';
   document.getElementById('new-costo-calc').value          = '';
   document.getElementById('new-costo-valor-global').value  = '';
@@ -768,7 +774,7 @@ function renderPendingCostos() {
       '<tr>' +
         '<td>' + c.nombre + '</td>' +
         '<td><span class="tag tag-blue">' + c.tipo + '</span></td>' +
-        '<td>' + (c.incoterm || '—') + '</td>' +
+        '<td>' + (['—','EXW','FOB','CIF','DDP'][c.incoterm_id || 0] || '—') + '</td>' +
         '<td><span class="tag tag-yellow">' + c.moneda + '</span></td>' +
         '<td style="font-size:.75rem;color:var(--muted)">' + (c.cot_item_id || '<em>Global</em>') + '</td>' +
         '<td>' + (c.es_global ? '—' : parseFloat(c.valor_kg  || 0).toFixed(2)) + '</td>' +
@@ -778,6 +784,32 @@ function renderPendingCostos() {
       '</tr>';
   }
   body.innerHTML = rows;
+}
+
+// ── Comisiones y descuentos ───────────────────────────────
+
+function onComisionChange(input) {
+  var cotItemId   = input.dataset.comisionItem;
+  var tasaId      = String(input.dataset.tasaId);
+  var newPct      = parseFloat(input.value || 0);
+  var baseCalculo = parseFloat(input.dataset.baseCalculo || 0);
+  var descuenta   = input.dataset.descuenta === 'true';
+
+  var key = cotItemId + '_' + tasaId;
+  pendingComisiones[key] = { cot_item_id: cotItemId, tasa_id: tasaId, tasa_valor: newPct };
+
+  var valor    = baseCalculo * (newPct / 100) * (descuenta ? -1 : 1);
+  var tUSD     = parseFloat(tasaUSD || 0);
+  var tEUR     = parseFloat(tasaEUR || 0);
+  var valorUSD = tUSD > 0 ? valor / tUSD : 0;
+  var valorEUR = tEUR > 0 ? valor / tEUR : 0;
+
+  var copEl = document.getElementById('com-cop-' + cotItemId + '-' + tasaId);
+  var usdEl = document.getElementById('com-usd-' + cotItemId + '-' + tasaId);
+  var eurEl = document.getElementById('com-eur-' + cotItemId + '-' + tasaId);
+  if (copEl) copEl.textContent = Math.round(valor).toLocaleString('es-CO') + ' COP';
+  if (usdEl) usdEl.textContent = formatUSD(valorUSD);
+  if (eurEl) eurEl.textContent = formatEUR(valorEUR);
 }
 
 // ── Ignorar ítem ──────────────────────────────────────────

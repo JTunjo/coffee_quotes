@@ -108,6 +108,29 @@ function labelUnidad(presentacion) {
   return presentacion === 'Granel' ? 'lote' : 'bolsa ' + presentacion;
 }
 
+// ── Incoterms ─────────────────────────────────────────────
+var INCOTERMS = [
+  { id: 1, nombre: 'EXW' },
+  { id: 2, nombre: 'FOB' },
+  { id: 3, nombre: 'CIF' },
+  { id: 4, nombre: 'DDP' },
+];
+
+// Costo total acumulado hasta el nivel de incoterm dado (en COP)
+// El costo base del lote (disponibilidades) siempre se incluye en nivel >= 1
+function calcIncotermTotal(loteCosto, itemCostos, nivel, tUSD, tEUR, factor, cant, presentacion) {
+  if (!nivel) return 0;
+  var cantKg   = presentacion === 'Granel' ? parseFloat(cant) : parseFloat(cant) * factor;
+  var baseKgCOP = parseFloat(loteCosto || 0); // lote base → EXW
+  itemCostos.forEach(function(c) {
+    var cNivel = parseFloat(c.incoterm_id || 0);
+    if (cNivel > 0 && cNivel <= nivel) {
+      baseKgCOP += aCOP(parseFloat(c.valor_kg || 0), c.moneda, tUSD, tEUR);
+    }
+  });
+  return baseKgCOP * cantKg;
+}
+
 // ── Mapa de costos por lote ───────────────────────────────
 var loteCostosMap = {};
 
@@ -132,7 +155,9 @@ function renderCotizacion(data, soloLectura, resultadosDisp) {
   var cotizacion = data.cotizacion;
   var items      = data.items;
   var costos     = data.costos;
-  var rfqItems   = data.rfqItems || [];
+  var rfqItems   = data.rfqItems   || [];
+  var tasas      = data.tasas      || [];
+  var comisiones = data.comisiones || [];
   var monedaRFQ  = (cotizacion.moneda_solicitada || 'USD').toUpperCase();
 
   var dispMap = {};
@@ -413,24 +438,75 @@ function renderCotizacion(data, soloLectura, resultadosDisp) {
           '<tbody>' + (costosAdicRows || emptyRow) + '</tbody>' +
         '</table></div>' +
       '</div>' +
-      // ── Comisiones y Descuentos (estructura placeholder) ─
+      // ── Sub-totales por Incoterm ─────────────────────────
       '<div style="margin-bottom:1rem">' +
-        '<div style="font-size:.8rem;font-weight:700;color:var(--accent2);margin-bottom:.35rem">Detalle Comisiones y Descuentos</div>' +
-        '<div class="tbl-wrap"><table>' +
-          '<thead><tr>' +
-            '<th>Detalle</th><th>% (Editable)</th>' +
-            '<th>Valor (COP)</th><th>Valor (USD)</th><th>Valor (EUR)</th>' +
-          '</tr></thead>' +
-          '<tbody>' +
-            '<tr><td style="color:var(--muted);font-style:italic">Comisión ventas</td>' +
-              '<td><input type="number" step="0.1" placeholder="0.0" style="width:70px" disabled /></td>' +
-              '<td style="color:var(--muted)">—</td><td style="color:var(--muted)">—</td><td style="color:var(--muted)">—</td></tr>' +
-            '<tr><td style="color:var(--muted);font-style:italic">Descuento cliente</td>' +
-              '<td><input type="number" step="0.1" placeholder="0.0" style="width:70px" disabled /></td>' +
-              '<td style="color:var(--muted)">—</td><td style="color:var(--muted)">—</td><td style="color:var(--muted)">—</td></tr>' +
-          '</tbody>' +
-        '</table></div>' +
+        '<div style="font-size:.8rem;font-weight:700;color:var(--accent2);margin-bottom:.35rem">Sub-totales por Incoterm</div>' +
+        '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:.4rem">' +
+        INCOTERMS.map(function(inc) {
+          var totInc    = calcIncotermTotal(parseFloat(item.costo_lote_kg || 0), itemCostos, inc.id, tUSD, tEUR, factor, cant, item.presentacion);
+          var totIncMon = monedaRFQ === 'USD' && tUSD > 0 ? totInc / tUSD
+                        : monedaRFQ === 'EUR' && tEUR > 0 ? totInc / tEUR : totInc;
+          return '<div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:.4rem .6rem;text-align:center">' +
+            '<div style="font-size:.7rem;font-weight:700;color:var(--muted)">' + inc.nombre + '</div>' +
+            '<div style="font-size:.8rem;font-weight:700">' + (totInc / 1e6).toFixed(3) + ' MM COP</div>' +
+            '<div style="font-size:.7rem;color:var(--muted)">' + formatMon(totIncMon / 1000, monedaRFQ) + ' K</div>' +
+          '</div>';
+        }).join('') +
+        '</div>' +
       '</div>' +
+      // ── Comisiones y Descuentos (dinámico) ───────────────
+      (function() {
+        var emptyComision = '<tr><td colspan="5" style="color:var(--muted);text-align:center;font-size:.78rem">Sin tasas configuradas en la hoja Tasas</td></tr>';
+        var comisionRows = tasas.map(function(tasa) {
+          var override  = comisiones.filter(function(c) {
+            return String(c.cot_item_id) === String(item.cot_item_id)
+                && String(c.tasa_id) === String(tasa.tasa_id);
+          })[0];
+          var tasaValor = override ? parseFloat(override.tasa_valor) : parseFloat(tasa.tasa_valor || 0);
+          var nivel     = parseFloat(tasa.incoterm_aplicable || 0);
+          var baseTotal = calcIncotermTotal(parseFloat(item.costo_lote_kg || 0), itemCostos, nivel, tUSD, tEUR, factor, cant, item.presentacion);
+          var descuenta = tasa.descuenta === true || String(tasa.descuenta).toUpperCase() === 'TRUE';
+          var valor     = baseTotal * (tasaValor / 100) * (descuenta ? -1 : 1);
+          var valorUSD  = tUSD > 0 ? valor / tUSD : 0;
+          var valorEUR  = tEUR > 0 ? valor / tEUR : 0;
+          var incLabel  = (INCOTERMS.filter(function(i) { return i.id === nivel; })[0] || {}).nombre || '—';
+
+          var pctCell = soloLectura
+            ? '<td>' + tasaValor.toFixed(2) + '%</td>'
+            : '<td><div style="display:flex;align-items:center;gap:.3rem">' +
+                '<input type="number" step="0.01" value="' + tasaValor.toFixed(2) + '"' +
+                ' data-comision-item="' + item.cot_item_id + '"' +
+                ' data-tasa-id="' + tasa.tasa_id + '"' +
+                ' data-base-calculo="' + Math.round(baseTotal) + '"' +
+                ' data-descuenta="' + descuenta + '"' +
+                ' onchange="onComisionChange(this)"' +
+                ' style="width:80px" />' +
+                '<span style="font-size:.75rem;color:var(--muted)">%</span>' +
+              '</div></td>';
+
+          return '<tr>' +
+            '<td>' + (tasa.tasa_detalle || '—') +
+              ' <span class="tag tag-blue" style="font-size:.62rem">' + incLabel + '</span>' +
+              (descuenta ? ' <span class="tag tag-yellow" style="font-size:.62rem">↓ Desc.</span>' : '') +
+            '</td>' +
+            pctCell +
+            '<td id="com-cop-' + item.cot_item_id + '-' + tasa.tasa_id + '">' + Math.round(valor).toLocaleString('es-CO') + ' COP</td>' +
+            '<td id="com-usd-' + item.cot_item_id + '-' + tasa.tasa_id + '">' + formatUSD(valorUSD) + '</td>' +
+            '<td id="com-eur-' + item.cot_item_id + '-' + tasa.tasa_id + '">' + formatEUR(valorEUR) + '</td>' +
+          '</tr>';
+        }).join('');
+
+        return '<div style="margin-bottom:1rem">' +
+          '<div style="font-size:.8rem;font-weight:700;color:var(--accent2);margin-bottom:.35rem">Detalle Comisiones y Descuentos</div>' +
+          '<div class="tbl-wrap"><table>' +
+            '<thead><tr>' +
+              '<th>Detalle</th><th>% (Editable)</th>' +
+              '<th>Valor (COP)</th><th>Valor (USD)</th><th>Valor (EUR)</th>' +
+            '</tr></thead>' +
+            '<tbody>' + (comisionRows || emptyComision) + '</tbody>' +
+          '</table></div>' +
+        '</div>';
+      })() +
       prorrateoHtml +
       // ── Perfil sensorial (sin cambios) ───────────────────
       '<div style="margin-top:.75rem">' +
