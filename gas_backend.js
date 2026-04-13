@@ -59,6 +59,24 @@ function sheetToObjects(name) {
   return result;
 }
 
+// Write multiple rows in a single Sheets API call
+function batchAppendRows(name, objs) {
+  if (!objs || !objs.length) return;
+  var sh      = getSheet(name);
+  var headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0]
+    .map(function(h) { return String(h).trim(); });
+  var lastRow = sh.getLastRow();
+  var matrix  = [];
+  for (var i = 0; i < objs.length; i++) {
+    var row = [];
+    for (var j = 0; j < headers.length; j++) {
+      row.push(objs[i][headers[j]] !== undefined ? objs[i][headers[j]] : '');
+    }
+    matrix.push(row);
+  }
+  sh.getRange(lastRow + 1, 1, matrix.length, headers.length).setValues(matrix);
+}
+
 function appendRow(name, obj) {
   var sh      = getSheet(name);
   var headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
@@ -760,12 +778,16 @@ function crearRFQ(body) {
   var disponibles    = sheetToObjects(SHEETS.DISPONIBILIDADES);
   var costosEstandar = sheetToObjects(SHEETS.COSTOS_ESTANDAR);
 
+  var rfqItemsRows   = [];
+  var cotItemsRows   = [];
+  var cotCostosRows  = [];
+
   for (var i = 0; i < items.length; i++) {
     var item      = items[i];
     var rfqItemId = uid();
     var cotItemId = uid();
 
-    appendRow(SHEETS.RFQ_ITEMS, {
+    rfqItemsRows.push({
       rfq_item_id:       rfqItemId,
       rfq_id:            rfqId,
       variedad:          item.variedad          || '',
@@ -780,10 +802,10 @@ function crearRFQ(body) {
       perfil_sensorial:  item.perfil_sensorial  || '',
     });
 
-    var lote           = findOne(disponibles, function(d) { return d.lote_id === item.lote_id; }) || {};
-    var costo_lote_kg  = parseFloat(lote.costo_cop_kg || 0);
+    var lote          = findOne(disponibles, function(d) { return d.lote_id === item.lote_id; }) || {};
+    var costo_lote_kg = parseFloat(lote.costo_cop_kg || 0);
 
-    appendRow(SHEETS.COTIZACION_ITEMS, {
+    cotItemsRows.push({
       cot_item_id:       cotItemId,
       cotizacion_id:     cotId,
       rfq_item_id:       rfqItemId,
@@ -803,7 +825,6 @@ function crearRFQ(body) {
       perfil_sensorial:  item.perfil_sensorial  || '',
     });
 
-    // Filtrar costos estándar por tier Y estado_proceso (campo presentacion en Costos_estandar)
     var estadoProceso = (item.estado_proceso || 'Verde').toLowerCase();
     var aplicables = filterArr(costosEstandar, function(c) {
       if (c.activo === false || c.activo === 'FALSE') return false;
@@ -815,7 +836,7 @@ function crearRFQ(body) {
 
     for (var j = 0; j < aplicables.length; j++) {
       var c = aplicables[j];
-      appendRow(SHEETS.COTIZACION_COSTOS, {
+      cotCostosRows.push({
         costo_id:      uid(),
         cotizacion_id: cotId,
         cot_item_id:   cotItemId,
@@ -830,6 +851,11 @@ function crearRFQ(body) {
       });
     }
   }
+
+  // Write all rows in three batch calls instead of N×M individual appends
+  batchAppendRows(SHEETS.RFQ_ITEMS,        rfqItemsRows);
+  batchAppendRows(SHEETS.COTIZACION_ITEMS, cotItemsRows);
+  batchAppendRows(SHEETS.COTIZACION_COSTOS, cotCostosRows);
 
   appendRow(SHEETS.COTIZACIONES, {
     cotizacion_id:     cotId,
