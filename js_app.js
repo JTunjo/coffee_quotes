@@ -319,13 +319,8 @@ function addRfqItem() {
         '<option value="Verde" selected>Verde</option>' +
         '<option value="Tostado">Tostado</option>' +
       '</select></div>' +
-    '<div><label>Tier</label>' +
-      '<select data-field="tier">' +
-        '<option value="estandar">Estándar</option>' +
-        '<option value="lavado">Lavado</option>' +
-        '<option value="fermentado">Fermentado</option>' +
-        '<option value="especial">Especial</option>' +
-      '</select></div>' +
+    '<div><label>Etiquetas <span style="color:var(--muted);font-weight:400">(separadas por coma)</span></label>' +
+      '<input placeholder="Ej. lavado,especial" data-field="etiquetas" /></div>' +
     '<div><label>Lote ID (opcional)</label>' +
       '<input placeholder="auto" data-field="lote_id" /></div>' +
     '<div style="grid-column:1/-1">' +

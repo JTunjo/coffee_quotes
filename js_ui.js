@@ -398,7 +398,7 @@ function renderCotizacion(data, soloLectura, resultadosDisp) {
           '<span' + (!fechaRaw ? ' style="color:var(--red)"' : '') + '>' + fechaReq + '</span></div>' +
         '<div><label>Presentación</label><span class="tag tag-blue">' + item.presentacion + '</span></div>' +
         '<div><label>Estado proceso</label><span class="tag tag-blue">' + (item.estado_proceso || '—') + '</span></div>' +
-        '<div><label>Tier</label><span class="tag tag-green">' + (item.tier || '—') + '</span></div>' +
+        '<div><label>Etiquetas</label><span class="tag tag-green">' + (item.etiquetas || '—') + '</span></div>' +
         '<div><label>Cantidad</label><span>' + item.cantidad_unidades + ' ' + labelUnidad(item.presentacion) + '</span></div>' +
       '</div>' +
       // ── Línea 2: costos por unidad / kg ─────────────────
