@@ -54,15 +54,21 @@ function _preloadEtiquetas() {
   apiGet({ action: 'getEtiquetas' }).then(function(res) {
     if (res && res.ok && res.etiquetas) {
       etiquetasCache = res.etiquetas;
-      refreshEtiquetasWidgets();
+    } else {
+      console.warn('[etiquetas] respuesta inesperada del servidor:', res);
+      etiquetasCache = [];
     }
+    refreshEtiquetasWidgets();
   }).catch(function(e) { console.error('[init] etiquetas:', e); });
 }
 
 // Returns the inner HTML for a checkbox group bound to a single hidden input.
 function buildEtiquetasCheckboxes() {
-  if (!etiquetasCache || !etiquetasCache.length) {
+  if (etiquetasCache === null) {
     return '<span style="color:var(--muted);font-size:.8rem">Cargando etiquetas…</span>';
+  }
+  if (!etiquetasCache.length) {
+    return '<span style="color:var(--muted);font-size:.8rem">Sin etiquetas disponibles</span>';
   }
   return etiquetasCache.map(function(e) {
     var nombre = e.etiqueta_nombre.replace(/"/g, '&quot;');
