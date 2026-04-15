@@ -845,18 +845,31 @@ function renderPendingCostos() {
 // ── Comisiones y descuentos ───────────────────────────────
 
 function onComisionChange(input) {
-  var cotItemId   = input.dataset.comisionItem;
-  var tasaId      = String(input.dataset.tasaId);
-  var newPct      = parseFloat(input.value || 0);
-  var baseCalculo = parseFloat(input.dataset.baseCalculo || 0);
-  var descuenta   = input.dataset.descuenta === 'true';
+  var cotItemId = input.dataset.comisionItem;
+  var tasaId    = String(input.dataset.tasaId);
+  var newPct    = parseFloat(input.value || 0);
 
   var key = cotItemId + '_' + tasaId;
   pendingComisiones[key] = { cot_item_id: cotItemId, tasa_id: tasaId, tasa_valor: newPct };
 
-  var valor    = baseCalculo * (newPct / 100) * (descuenta ? -1 : 1);
-  var tUSD     = parseFloat(tasaUSD || 0);
-  var tEUR     = parseFloat(tasaEUR || 0);
+  if (!cotState || !tasasCache) return;
+
+  var item = cotState.items.filter(function(i) { return i.cot_item_id === cotItemId; })[0];
+  var tasa = tasasCache.filter(function(t) { return String(t.tasa_id) === tasaId; })[0];
+  if (!item || !tasa) return;
+
+  var tUSD       = parseFloat(tasaUSD || 0);
+  var tEUR       = parseFloat(tasaEUR || 0);
+  var cant       = parseFloat(item.cantidad_unidades || 0);
+  var factor     = factorPresentacion(item.presentacion, cant);
+  var nivel      = parseFloat(tasa.incoterm_aplicable || 0);
+  var descuenta  = tasa.descuenta === true || String(tasa.descuenta).toUpperCase() === 'TRUE';
+  var itemCostos = cotState.costos.filter(function(c) { return c.cot_item_id === cotItemId; });
+
+  var baseTotal = calcIncotermTotal(
+    parseFloat(item.costo_lote_kg || 0), itemCostos, nivel, tUSD, tEUR, factor, cant, item.presentacion
+  );
+  var valor    = baseTotal * (newPct / 100) * (descuenta ? -1 : 1);
   var valorUSD = tUSD > 0 ? valor / tUSD : 0;
   var valorEUR = tEUR > 0 ? valor / tEUR : 0;
 
