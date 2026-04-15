@@ -19,6 +19,7 @@ var SHEETS = {
   COTIZACION_COSTOS:           'Cotizacion_costos',
   COTIZACION_COSTOS_HISTORIAL: 'Cotizacion_costos_historial',
   COTIZACION_TASAS:            'Cotizacion_tasas',
+  LISTAS:                      'Listas',
 };
 
 // ── Helpers generales ─────────────────────────────────────
@@ -276,6 +277,7 @@ function doGet(e) {
       else if (action === 'getCotizacionesPorRFQ')   result = getCotizacionesPorRFQ(p.rfqId);
       else if (action === 'getDisponibles')          result = getDisponibilidades();
       else if (action === 'getCostosEstandar')       result = getCostosEstandar();
+      else if (action === 'getEtiquetas')            result = getEtiquetas();
       else if (action === 'listRFQs')                result = listRFQs();
       else if (action === 'verificarDisponibilidad') result = verificarDisponibilidad(p.cotizacionId);
       else if (action === 'getTasas')                result = getTasas();
@@ -414,6 +416,17 @@ function getDisponibilidades() {
 
 function getCostosEstandar() {
   return { ok: true, costos: sheetToObjects(SHEETS.COSTOS_ESTANDAR) };
+}
+
+function getEtiquetas() {
+  var rows = sheetToObjects(SHEETS.LISTAS);
+  var etiquetas = filterArr(rows, function(r) {
+    return r.etiqueta_id !== undefined && r.etiqueta_id !== '' &&
+           r.etiqueta_nombre !== undefined && r.etiqueta_nombre !== '';
+  }).map(function(r) {
+    return { etiqueta_id: String(r.etiqueta_id).trim(), etiqueta_nombre: String(r.etiqueta_nombre).trim() };
+  });
+  return { ok: true, etiquetas: etiquetas };
 }
 
 // ── Recalcular costos estándar ────────────────────────────
