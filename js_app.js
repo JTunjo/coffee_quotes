@@ -796,7 +796,7 @@ function addManualCost() {
 
   document.getElementById('new-costo-nombre').value        = '';
   document.getElementById('new-costo-item').value          = '';
-  document.getElementById('new-costo-incoterm').value      = '0';
+  document.getElementById('new-costo-incoterm').value      = '4';
   document.getElementById('new-costo-valor').value         = '';
   document.getElementById('new-costo-calc').value          = '';
   document.getElementById('new-costo-valor-global').value  = '';

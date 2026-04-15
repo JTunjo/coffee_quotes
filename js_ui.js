@@ -335,7 +335,7 @@ function renderCotizacion(data, soloLectura, resultadosDisp) {
       return '<tr id="row-' + c.costo_id + '">' +
         '<td>' + c.nombre + '</td>' +
         '<td><span class="tag tag-blue">' + c.tipo + '</span></td>' +
-        '<td>' + (c.incoterm || '—') + '</td>' +
+        '<td>' + (['—','EXW','FOB','CIF','DDP'][parseFloat(c.incoterm_id || 0)] || '—') + '</td>' +
         valKgCell +
         '<td>' + Math.round(undCOP).toLocaleString('es-CO') + '</td>' +
         '<td id="sub-' + c.costo_id + '">' + Math.round(totCOP).toLocaleString('es-CO') + '</td>' +

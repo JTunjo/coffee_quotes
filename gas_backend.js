@@ -402,7 +402,9 @@ function verificarDisponibilidad(cotizacionId) {
       continue;
     }
 
-    var variedadItem    = (item.variedad || '').toLowerCase();
+    var factor       = factorPresentacion(item.presentacion, cantidadUnid);
+    var cantidadKg   = item.presentacion === 'Granel' ? cantidadUnid : cantidadUnid * factor;
+    var variedadItem = (item.variedad || '').toLowerCase();
     var lotesCandidatos = filterArr(disponibles, function(d) {
       if ((d.variedad || '').toLowerCase() !== variedadItem) return false;
       var dDesde = d.fecha_disponible_desde instanceof Date
@@ -411,7 +413,7 @@ function verificarDisponibilidad(cotizacionId) {
         ? d.fecha_disponible_hasta : new Date(d.fecha_disponible_hasta);
       if (isNaN(dDesde.getTime()) || isNaN(dHasta.getTime())) return false;
       return fechaReq >= dDesde && fechaReq <= dHasta &&
-             parseFloat(d.kilos_disponibles || 0) > cantidadUnid;
+             parseFloat(d.kilos_disponibles || 0) >= cantidadKg;
     });
 
     if (lotesCandidatos.length === 0) {
