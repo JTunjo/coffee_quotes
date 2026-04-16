@@ -20,6 +20,7 @@ var SHEETS = {
   COTIZACION_COSTOS_HISTORIAL: 'Cotizacion_costos_historial',
   COTIZACION_TASAS:            'Cotizacion_tasas',
   LISTAS:                      'Listas',
+  ETIQUETAS:                   'Etiquetas',
 };
 
 // ── Helpers generales ─────────────────────────────────────
@@ -419,7 +420,7 @@ function getCostosEstandar() {
 }
 
 function getEtiquetas() {
-  var rows = sheetToObjects(SHEETS.LISTAS);
+  var rows = sheetToObjects(SHEETS.ETIQUETAS);
   var etiquetas = filterArr(rows, function(r) {
     return r.etiqueta_id !== undefined && r.etiqueta_id !== '' &&
            r.etiqueta_nombre !== undefined && r.etiqueta_nombre !== '';
