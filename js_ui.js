@@ -352,9 +352,8 @@ function renderCotizacion(data, soloLectura, resultadosDisp) {
     if (globalCostos.length && totalKgTodos > 0) {
       var proporcion = cantKg / totalKgTodos;
       var rows = globalCostos.map(function(gc) {
-        var vCOP       = aCOP(parseFloat(gc.valor_kg || 0), gc.moneda, tUSD, tEUR);
-        var totGlobalCOP = vCOP * totalKgTodos;
-        var prorCOP    = totGlobalCOP * proporcion;
+        var vCOP    = aCOP(parseFloat(gc.valor_kg || 0), gc.moneda, tUSD, tEUR);
+        var prorCOP = vCOP * proporcion;
         var prorMon    = monedaRFQ === 'USD' && tUSD > 0 ? prorCOP / tUSD
                        : monedaRFQ === 'EUR' && tEUR > 0 ? prorCOP / tEUR : prorCOP;
         return '<tr>' +
