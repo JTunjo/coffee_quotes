@@ -835,7 +835,7 @@ function addManualCost() {
       incoterm_id:  incotermId,
       moneda:       moneda,
       cot_item_id:  '',
-      valor_kg:     0,
+      valor_kg:     valorTotal,   // stored as flat total in the chosen currency
       valor_und:    0,
       valor_total:  valorTotal,
       es_global:    true,

@@ -600,18 +600,15 @@ function renderSummary(items, costos) {
   var monRFQ = cotState ? (cotState.cotizacion.moneda_solicitada || 'USD').toUpperCase() : 'USD';
 
   var globalCostos = costos.filter(function(c) { return !c.cot_item_id; });
-  var totalKgTodos = 0;
-  items.forEach(function(item) {
-    var f = factorPresentacion(item.presentacion, item.cantidad_unidades);
-    var c = parseFloat(item.cantidad_unidades || 0);
-    totalKgTodos += item.presentacion === 'Granel' ? c : c * f;
-  });
+  var tasas        = cotState ? (cotState.tasas      || []) : [];
+  var comisiones   = cotState ? (cotState.comisiones || []) : [];
 
   var grandCOP = 0;
   var grandUSD = 0;
   var grandEUR = 0;
-  var itemRows = '';
 
+  // ── 1. Ítems ──────────────────────────────────────────────
+  var itemRows = '';
   items.forEach(function(item) {
     var loteCosto = parseFloat(item.costo_lote_kg || 0);
     var inputs    = document.querySelectorAll('[data-item-id="' + item.cot_item_id + '"]');
@@ -657,15 +654,62 @@ function renderSummary(items, costos) {
       '</tr>';
   });
 
-  // Costos globales
+  // ── 2. Tasas (grouped across all items) ──────────────────
+  var tasaTotals = {}; // { tasa_id: { detalle, cop, usd, eur } }
+  if (tasas.length > 0) {
+    items.forEach(function(item) {
+      var itemCostos = costos.filter(function(c) { return c.cot_item_id === item.cot_item_id; });
+      var factor     = factorPresentacion(item.presentacion, item.cantidad_unidades);
+      var cant       = parseFloat(item.cantidad_unidades || 0);
+      var loteCosto  = parseFloat(item.costo_lote_kg || 0);
+
+      tasas.forEach(function(tasa) {
+        var override  = comisiones.filter(function(c) {
+          return String(c.cot_item_id) === String(item.cot_item_id)
+              && String(c.tasa_id)     === String(tasa.tasa_id);
+        })[0];
+        var tasaValor = override ? parseFloat(override.tasa_valor) : parseFloat(tasa.tasa_valor || 0);
+        var nivel     = parseFloat(tasa.incoterm_aplicable || 0);
+        var baseTotal = calcIncotermTotal(loteCosto, itemCostos, nivel, tUSD, tEUR, factor, cant, item.presentacion);
+        var descuenta = tasa.descuenta === true || String(tasa.descuenta).toUpperCase() === 'TRUE';
+        var valor     = baseTotal * (tasaValor / 100) * (descuenta ? -1 : 1);
+        var valorUSD  = tUSD > 0 ? valor / tUSD : 0;
+        var valorEUR  = tEUR > 0 ? valor / tEUR : 0;
+
+        var tid = String(tasa.tasa_id);
+        if (!tasaTotals[tid]) {
+          tasaTotals[tid] = { detalle: tasa.tasa_detalle || '—', cop: 0, usd: 0, eur: 0 };
+        }
+        tasaTotals[tid].cop += valor;
+        tasaTotals[tid].usd += valorUSD;
+        tasaTotals[tid].eur += valorEUR;
+      });
+    });
+  }
+
+  var tasaRows = '';
+  var tasaIds  = Object.keys(tasaTotals);
+  for (var t = 0; t < tasaIds.length; t++) {
+    var tt = tasaTotals[tasaIds[t]];
+    grandCOP += tt.cop;
+    grandUSD += tt.usd;
+    grandEUR += tt.eur;
+    tasaRows +=
+      '<tr>' +
+        '<td>' + tt.detalle + '</td>' +
+        summaryCell(formatCOP(tt.cop), monRFQ === 'COP') +
+        summaryCell(formatUSD(tt.usd), monRFQ === 'USD') +
+        summaryCell(formatEUR(tt.eur), monRFQ === 'EUR') +
+      '</tr>';
+  }
+
+  // ── 3. Costos globales ────────────────────────────────────
+  // valor_kg stores a flat total in the cost's own currency (not per-kg).
   var globalRows = '';
   globalCostos.forEach(function(gc) {
-    var vCOP    = aCOP(parseFloat(gc.valor_kg || 0), gc.moneda, tUSD, tEUR);
-    var totGCOP = vCOP * totalKgTodos;
+    var totGCOP = aCOP(parseFloat(gc.valor_kg || 0), gc.moneda, tUSD, tEUR);
     var totGUSD = tUSD > 0 ? totGCOP / tUSD : 0;
     var totGEUR = tEUR > 0 ? totGCOP / tEUR : 0;
-    var pkgMon  = monRFQ === 'USD' && tUSD > 0 ? vCOP / tUSD
-                : monRFQ === 'EUR' && tEUR > 0 ? vCOP / tEUR : vCOP;
     grandCOP += totGCOP;
     grandUSD += totGUSD;
     grandEUR += totGEUR;
@@ -675,11 +719,10 @@ function renderSummary(items, costos) {
         summaryCell(formatCOP(totGCOP), monRFQ === 'COP') +
         summaryCell(formatUSD(totGUSD), monRFQ === 'USD') +
         summaryCell(formatEUR(totGEUR), monRFQ === 'EUR') +
-        '<td>' + formatMon(pkgMon, monRFQ) + '/kg</td>' +
-        '<td>—</td>' +
       '</tr>';
   });
 
+  // ── Render ────────────────────────────────────────────────
   var el = document.getElementById('cot-summary');
   if (!el) return;
 
@@ -690,7 +733,7 @@ function renderSummary(items, costos) {
     (sinTasas
       ? '<p style="margin:.4rem 0;font-size:.78rem;color:var(--red)">⚠ Ingresa las tasas de cambio para ver totales en USD y EUR.</p>'
       : '') +
-    // Tabla de ítems (dentro de details)
+    // 1. Ítems (collapsible)
     '<details style="margin-top:.75rem">' +
       '<summary style="cursor:pointer;font-size:.85rem;color:var(--accent2);margin-bottom:.5rem">Ver detalle por ítem ▸</summary>' +
       '<div class="tbl-wrap" style="margin-top:.5rem"><table>' +
@@ -705,7 +748,19 @@ function renderSummary(items, costos) {
         '<tbody>' + itemRows + '</tbody>' +
       '</table></div>' +
     '</details>' +
-    // Tabla costos globales (solo si existen)
+    // 2. Tasas (solo si existen)
+    (tasaIds.length
+      ? '<div class="tbl-wrap" style="margin-top:.75rem"><table>' +
+          '<thead><tr>' +
+            summaryTH('Tasa', false) +
+            summaryTH('Total COP', monRFQ === 'COP') +
+            summaryTH('Total USD', monRFQ === 'USD') +
+            summaryTH('Total EUR', monRFQ === 'EUR') +
+          '</tr></thead>' +
+          '<tbody>' + tasaRows + '</tbody>' +
+        '</table></div>'
+      : '') +
+    // 3. Costos globales (solo si existen)
     (globalCostos.length
       ? '<div class="tbl-wrap" style="margin-top:.75rem"><table>' +
           '<thead><tr>' +
@@ -713,7 +768,6 @@ function renderSummary(items, costos) {
             summaryTH('Total COP', monRFQ === 'COP') +
             summaryTH('Total USD', monRFQ === 'USD') +
             summaryTH('Total EUR', monRFQ === 'EUR') +
-            '<th>' + monRFQ + '/Kg</th><th>' + monRFQ + '/Und</th>' +
           '</tr></thead>' +
           '<tbody>' + globalRows + '</tbody>' +
         '</table></div>'
