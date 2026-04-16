@@ -123,29 +123,36 @@
       page-break-after: always;
       background-image: url('https://raw.githubusercontent.com/JTunjo/asset_hosting/refs/heads/main/coffee_background.png');
       background-size: cover; background-position: center;
-      background-color: #004722;
+      background-color: #1a1a1a;
       position: relative; z-index: 10;
       display: flex; flex-direction: column;
       align-items: center; justify-content: center;
+      -webkit-print-color-adjust: exact; print-color-adjust: exact;
     }
-    #print-cover-overlay {
-      position: absolute; inset: 0;
-      background: rgba(0, 71, 34, 0.6);
-      display: flex; align-items: center; justify-content: center;
-      z-index: 11;
+    #print-cover-logo {
+      position: absolute; top: 2cm;
+      height: 2.2cm; width: auto;
+    }
+    #print-cover-box {
+      background: rgba(0, 71, 34, 0.72);
+      border: 2px solid #fff;
+      padding: 1.1cm 2cm;
+      text-align: center;
+      max-width: 72%;
+      -webkit-print-color-adjust: exact; print-color-adjust: exact;
     }
     #print-cover-title {
       font-family: 'Montserrat', sans-serif;
       font-size: 23pt; font-weight: 600;
       color: #fff; text-align: center;
-      padding: 0 2cm; line-height: 1.4;
+      line-height: 1.4;
     }
     #print-cover-date {
       position: absolute; bottom: 1.5cm;
       width: 100%; text-align: center;
       font-family: 'Montserrat', sans-serif;
       font-size: 10pt; font-weight: 700;
-      color: #fff; z-index: 12;
+      color: #fff;
     }
 
     /* Content — pages 2+ */
@@ -194,6 +201,21 @@
       line-height: 1.5; white-space: pre-line;
       border-top: 1px solid #ccc;
       padding-top: .4cm; margin-top: .5cm;
+    }
+
+    /* Grand Grand Total */
+    #print-grand-total {
+      margin-top: .6cm;
+      padding: .5cm .75cm;
+      background: #004722 !important;
+      color: #fff;
+      font-family: 'Montserrat', sans-serif;
+      font-size: 11pt; font-weight: 700;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+      -webkit-print-color-adjust: exact; print-color-adjust: exact;
     }
 
     /* Running footer — logo left, page number right */
@@ -486,7 +508,8 @@
 
   <!-- Page 1: Cover -->
   <div id="print-cover">
-    <div id="print-cover-overlay">
+    <img id="print-cover-logo" src="logo-placeholder.png" alt="Logo" />
+    <div id="print-cover-box">
       <div id="print-cover-title"></div>
     </div>
     <div id="print-cover-date"></div>
@@ -512,6 +535,7 @@
     </table>
 
     <div id="print-footer-content"></div>
+    <div id="print-grand-total"></div>
   </div>
 
   <!-- Running footer on every page (cover is hidden behind it via z-index) -->

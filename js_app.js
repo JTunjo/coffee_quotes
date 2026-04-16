@@ -728,7 +728,10 @@ function construirVistaImpresion() {
     totalKgTodos += item.presentacion === 'Granel' ? c : c * f;
   });
 
-  var rows = activeItems.map(function(item) {
+  var rows            = [];
+  var grandTotalCOP   = 0;
+
+  activeItems.forEach(function(item) {
     var rfqItem    = rfqItems.filter(function(r) { return r.rfq_item_id === item.rfq_item_id; })[0] || {};
     var factor     = factorPresentacion(item.presentacion, item.cantidad_unidades);
     var cant       = parseFloat(item.cantidad_unidades || 0);
@@ -768,12 +771,14 @@ function construirVistaImpresion() {
     var grandMon = monedaRFQ === 'USD' && tUSD > 0 ? grandCOP / tUSD
                  : monedaRFQ === 'EUR' && tEUR > 0 ? grandCOP / tEUR : grandCOP;
 
+    grandTotalCOP += grandCOP;
+
     var fechaRaw = rfqItem.fecha_requerida;
     var fechaReq = fechaRaw
       ? (fechaRaw instanceof Date ? fechaRaw.toISOString().slice(0, 10) : String(fechaRaw).slice(0, 10))
       : '\u2014';
 
-    return '<tr>' +
+    rows.push('<tr>' +
       '<td>' + (item.variedad       || '\u2014') + '</td>' +
       '<td>' + (item.origen         || '\u2014') + '</td>' +
       '<td>' + fechaReq                          + '</td>' +
@@ -781,13 +786,20 @@ function construirVistaImpresion() {
       '<td>' + (item.presentacion   || '\u2014') + '</td>' +
       '<td>' + (item.estado_proceso || '\u2014') + '</td>' +
       '<td>' + formatMon(grandMon, monedaRFQ)    + '</td>' +
-    '</tr>';
-  }).join('');
+    '</tr>');
+  });
 
-  document.getElementById('print-table-body').innerHTML = rows;
+  document.getElementById('print-table-body').innerHTML = rows.join('');
 
   // ── Document footer ──────────────────────────────────────
   document.getElementById('print-footer-content').textContent = cot.footer || '';
+
+  // ── Grand Grand Total ────────────────────────────────────
+  var grandTotalMon = monedaRFQ === 'USD' && tUSD > 0 ? grandTotalCOP / tUSD
+                    : monedaRFQ === 'EUR' && tEUR > 0 ? grandTotalCOP / tEUR : grandTotalCOP;
+  document.getElementById('print-grand-total').innerHTML =
+    '<span>Gran Total</span>' +
+    '<span>' + formatMon(grandTotalMon, monedaRFQ) + '</span>';
 }
 
 async function saveCotizacion() {
