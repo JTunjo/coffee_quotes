@@ -30,8 +30,9 @@ var tasaUSD         = 0;
 var tasaEUR         = 0;
 var tasasCache      = null;
 
-var _TASAS_KEY = 'cf_tasas_v1';
-var _TASAS_TTL = 3600000; // 1 hour
+var _TASAS_KEY     = 'cf_tasas_v1';
+var _TASAS_TTL     = 3600000; // 1 hour
+var etiquetasCache = null;
 
 function _preloadTasas() {
   try {
@@ -47,6 +48,53 @@ function _preloadTasas() {
       try { sessionStorage.setItem(_TASAS_KEY, JSON.stringify({ ts: Date.now(), data: res.tasas })); } catch(e) {}
     }
   }).catch(function() {});
+}
+
+function _preloadEtiquetas() {
+  apiGet({ action: 'getEtiquetas' }).then(function(res) {
+    if (res && res.ok && res.etiquetas) {
+      etiquetasCache = res.etiquetas;
+    } else {
+      console.warn('[etiquetas] respuesta inesperada del servidor:', res);
+      etiquetasCache = [];
+    }
+    refreshEtiquetasWidgets();
+  }).catch(function(e) { console.error('[init] etiquetas:', e); });
+}
+
+// Returns the inner HTML for a checkbox group bound to a single hidden input.
+function buildEtiquetasCheckboxes() {
+  if (etiquetasCache === null) {
+    return '<span style="color:var(--muted);font-size:.8rem">Cargando etiquetas…</span>';
+  }
+  if (!etiquetasCache.length) {
+    return '<span style="color:var(--muted);font-size:.8rem">Sin etiquetas disponibles</span>';
+  }
+  return etiquetasCache.map(function(e) {
+    var nombre = e.etiqueta_nombre.replace(/"/g, '&quot;');
+    return '<label style="display:flex;align-items:center;gap:.3rem;cursor:pointer;font-size:.85rem">' +
+      '<input type="checkbox" value="' + nombre + '" onchange="_toggleEtiqueta(this)" />' +
+      e.etiqueta_nombre + '</label>';
+  }).join('');
+}
+
+// Updates the hidden input whenever a checkbox is toggled.
+function _toggleEtiqueta(cb) {
+  var widget = cb.closest('[data-etiquetas-widget]');
+  if (!widget) return;
+  var hidden  = widget.querySelector('input[type="hidden"][data-field="etiquetas"]');
+  var checked = Array.prototype.slice.call(
+    widget.querySelectorAll('input[type="checkbox"]:checked')
+  ).map(function(c) { return c.value; });
+  if (hidden) hidden.value = checked.join(',');
+}
+
+// Replaces the "Cargando…" placeholder in every existing item row once the
+// etiquetas list is available.
+function refreshEtiquetasWidgets() {
+  document.querySelectorAll('.etiquetas-checkboxes').forEach(function(div) {
+    div.innerHTML = buildEtiquetasCheckboxes();
+  });
 }
 
 // ══════════════════════════════════════════════════════════
@@ -319,13 +367,15 @@ function addRfqItem() {
         '<option value="Verde" selected>Verde</option>' +
         '<option value="Tostado">Tostado</option>' +
       '</select></div>' +
-    '<div><label>Tier</label>' +
-      '<select data-field="tier">' +
-        '<option value="estandar">Estándar</option>' +
-        '<option value="lavado">Lavado</option>' +
-        '<option value="fermentado">Fermentado</option>' +
-        '<option value="especial">Especial</option>' +
-      '</select></div>' +
+    '<div style="grid-column:1/-1">' +
+      '<label>Etiquetas</label>' +
+      '<div data-etiquetas-widget style="margin-top:.3rem">' +
+        '<input type="hidden" data-field="etiquetas" value="" />' +
+        '<div class="etiquetas-checkboxes" style="display:flex;flex-wrap:wrap;gap:.3rem .9rem">' +
+          buildEtiquetasCheckboxes() +
+        '</div>' +
+      '</div>' +
+    '</div>' +
     '<div><label>Lote ID (opcional)</label>' +
       '<input placeholder="auto" data-field="lote_id" /></div>' +
     '<div style="grid-column:1/-1">' +
@@ -785,7 +835,7 @@ function addManualCost() {
       incoterm_id:  incotermId,
       moneda:       moneda,
       cot_item_id:  '',
-      valor_kg:     0,
+      valor_kg:     valorTotal,   // stored as flat total in the chosen currency
       valor_und:    0,
       valor_total:  valorTotal,
       es_global:    true,
@@ -935,8 +985,9 @@ function init() {
     }
   }).catch(function(e) { console.error('[init] variedades:', e); });
 
-  // Pre-warm tasas cache in background
+  // Pre-warm tasas and etiquetas caches in background
   _preloadTasas();
+  _preloadEtiquetas();
 }
 
 document.addEventListener('DOMContentLoaded', init);

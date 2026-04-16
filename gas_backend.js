@@ -19,6 +19,8 @@ var SHEETS = {
   COTIZACION_COSTOS:           'Cotizacion_costos',
   COTIZACION_COSTOS_HISTORIAL: 'Cotizacion_costos_historial',
   COTIZACION_TASAS:            'Cotizacion_tasas',
+  LISTAS:                      'Listas',
+  ETIQUETAS:                   'Etiquetas',
 };
 
 // ── Helpers generales ─────────────────────────────────────
@@ -138,6 +140,55 @@ function mergeObj(base, overrides) {
   return result;
 }
 
+// Rewrites the sheet keeping only rows where predicate(obj) is falsy.
+function deleteRows(name, predicate) {
+  var sh      = getSheet(name);
+  var data    = sh.getDataRange().getValues();
+  if (data.length < 2) return 0;
+  var headers = data[0];
+  var kept    = [headers];
+  var deleted = 0;
+  for (var i = 1; i < data.length; i++) {
+    var obj     = {};
+    var isEmpty = true;
+    for (var j = 0; j < headers.length; j++) {
+      obj[String(headers[j]).trim()] = data[i][j];
+      if (data[i][j] !== '' && data[i][j] !== null) isEmpty = false;
+    }
+    if (isEmpty || predicate(obj)) {
+      deleted++;
+    } else {
+      kept.push(data[i]);
+    }
+  }
+  if (deleted > 0) {
+    sh.clearContents();
+    sh.getRange(1, 1, kept.length, headers.length).setValues(kept);
+  }
+  return deleted;
+}
+
+// Splits a comma-separated etiquetas string into a trimmed, lowercase array.
+function _parseEtiquetas(val) {
+  if (!val || String(val).trim() === '') return [];
+  return String(val).split(',').map(function(t) { return t.trim().toLowerCase(); }).filter(Boolean);
+}
+
+// Returns true if a cost's etiquetas apply to the item's etiquetas.
+// '*' or empty cost etiquetas → applies to all.
+// Otherwise at least one tag must intersect.
+function _etiquetasMatch(costEtiquetas, itemEtiquetas) {
+  var costTags = _parseEtiquetas(costEtiquetas);
+  if (costTags.length === 0 || costTags[0] === '*') return true;
+  var itemTags = _parseEtiquetas(itemEtiquetas);
+  for (var i = 0; i < costTags.length; i++) {
+    for (var j = 0; j < itemTags.length; j++) {
+      if (costTags[i] === itemTags[j]) return true;
+    }
+  }
+  return false;
+}
+
 function jsonResponse(data, status) {
   var payload = JSON.stringify(mergeObj({ ok: status !== 'error' }, data));
   return ContentService.createTextOutput(payload)
@@ -227,6 +278,7 @@ function doGet(e) {
       else if (action === 'getCotizacionesPorRFQ')   result = getCotizacionesPorRFQ(p.rfqId);
       else if (action === 'getDisponibles')          result = getDisponibilidades();
       else if (action === 'getCostosEstandar')       result = getCostosEstandar();
+      else if (action === 'getEtiquetas')            result = getEtiquetas();
       else if (action === 'listRFQs')                result = listRFQs();
       else if (action === 'verificarDisponibilidad') result = verificarDisponibilidad(p.cotizacionId);
       else if (action === 'getTasas')                result = getTasas();
@@ -367,10 +419,82 @@ function getCostosEstandar() {
   return { ok: true, costos: sheetToObjects(SHEETS.COSTOS_ESTANDAR) };
 }
 
+function getEtiquetas() {
+  var rows = sheetToObjects(SHEETS.ETIQUETAS);
+  var etiquetas = filterArr(rows, function(r) {
+    return r.etiqueta_id !== undefined && r.etiqueta_id !== '' &&
+           r.etiqueta_nombre !== undefined && r.etiqueta_nombre !== '';
+  }).map(function(r) {
+    return { etiqueta_id: String(r.etiqueta_id).trim(), etiqueta_nombre: String(r.etiqueta_nombre).trim() };
+  });
+  return { ok: true, etiquetas: etiquetas };
+}
+
+// ── Recalcular costos estándar ────────────────────────────
+//  Elimina todos los costos no-manuales del cotizacion y los regenera
+//  aplicando el matching de etiquetas contra costos_estandar.
+//  No se ejecuta si la cotización está en estado 'enviado' o 'cancelado'.
+
+function _recalcularCostosEstandar(cotizacionId) {
+  var cots = filterArr(sheetToObjects(SHEETS.COTIZACIONES),
+    function(r) { return r.cotizacion_id === cotizacionId; });
+  if (!cots.length) return;
+  var estado = (cots[0].estado || '').toLowerCase();
+  if (estado === 'enviado' || estado === 'cancelado') return;
+
+  var cotItems       = filterArr(sheetToObjects(SHEETS.COTIZACION_ITEMS),
+    function(i) { return i.cotizacion_id === cotizacionId; });
+  var costosEstandar = filterArr(sheetToObjects(SHEETS.COSTOS_ESTANDAR),
+    function(c) { return c.activo !== false && c.activo !== 'FALSE'; });
+
+  // Remove all existing non-manual costs for this cotizacion
+  deleteRows(SHEETS.COTIZACION_COSTOS, function(r) {
+    return r.cotizacion_id === cotizacionId && (r.tipo || '') !== 'manual';
+  });
+
+  // Re-add standard costs based on etiquetas matching (deduplicated per item)
+  var timestamp   = now();
+  var nuevaFilas  = [];
+  for (var i = 0; i < cotItems.length; i++) {
+    var item          = cotItems[i];
+    var estadoProceso = (item.estado_proceso || 'Verde').toLowerCase();
+    var aplicables    = filterArr(costosEstandar, function(c) {
+      var etiquetasOk = _etiquetasMatch(c.etiquetas, item.etiquetas);
+      var procOk      = !c.presentacion || c.presentacion === '*' ||
+                        c.presentacion.toLowerCase() === estadoProceso;
+      return etiquetasOk && procOk;
+    });
+    // Dedup by cost nombre within this item (a cost matching multiple tags
+    // should only be added once)
+    var seen = {};
+    for (var j = 0; j < aplicables.length; j++) {
+      var c = aplicables[j];
+      if (seen[c.nombre]) continue;
+      seen[c.nombre] = true;
+      nuevaFilas.push({
+        costo_id:      uid(),
+        cotizacion_id: cotizacionId,
+        cot_item_id:   item.cot_item_id,
+        nombre:        c.nombre,
+        tipo:          c.tipo || 'estandar',
+        moneda:        'COP',
+        valor_kg:      parseFloat(c.valor_cop_kg || 0),
+        incoterm_id:   parseFloat(c.incoterm_max  || 0),
+        editable:      true,
+        created_at:    timestamp,
+        updated_at:    timestamp,
+      });
+    }
+  }
+  if (nuevaFilas.length) batchAppendRows(SHEETS.COTIZACION_COSTOS, nuevaFilas);
+}
+
 // ── Verificación de disponibilidad ───────────────────────
 
 function verificarDisponibilidad(cotizacionId) {
   if (!cotizacionId) return { ok: false, error: 'cotizacionId requerido' };
+
+  _recalcularCostosEstandar(cotizacionId);
 
   var cotItems    = filterArr(sheetToObjects(SHEETS.COTIZACION_ITEMS),
     function(i) { return i.cotizacion_id === cotizacionId; });
@@ -567,7 +691,7 @@ function forkCotizacion(body) {
       cantidad_unidades: item.cantidad_unidades || 0,
       presentacion:      item.presentacion      || '1Kg',
       estado_proceso:    item.estado_proceso     || 'Verde',
-      tier:              item.tier              || 'estandar',
+      etiquetas:         item.etiquetas         || '',
       costo_lote_kg:     0,
       precio_final_kg:   0,
       precio_unitario:   0,
@@ -580,10 +704,10 @@ function forkCotizacion(body) {
     var estadoProceso = (item.estado_proceso || 'Verde').toLowerCase();
     var aplicables    = filterArr(costosEstandar, function(c) {
       if (c.activo === false || c.activo === 'FALSE') return false;
-      var tierOk = !c.tier || c.tier === '*' || c.tier === item.tier;
+      var etiquetasOk = _etiquetasMatch(c.etiquetas, item.etiquetas);
       var procOk = !c.presentacion || c.presentacion === '*' ||
                    c.presentacion.toLowerCase() === estadoProceso;
-      return tierOk && procOk;
+      return etiquetasOk && procOk;
     });
 
     for (var j = 0; j < aplicables.length; j++) {
@@ -799,7 +923,7 @@ function crearRFQ(body) {
       cantidad_unidades: item.cantidad_unidades || 0,
       presentacion:      item.presentacion      || '1Kg',
       estado_proceso:    item.estado_proceso     || 'Verde',
-      tier:              item.tier              || 'estandar',
+      etiquetas:         item.etiquetas         || '',
       lote_id:           item.lote_id           || '',
       perfil_sensorial:  item.perfil_sensorial  || '',
     });
@@ -817,7 +941,7 @@ function crearRFQ(body) {
       cantidad_unidades: item.cantidad_unidades || 0,
       presentacion:      item.presentacion      || '1Kg',
       estado_proceso:    item.estado_proceso     || 'Verde',
-      tier:              item.tier              || 'estandar',
+      etiquetas:         item.etiquetas         || '',
       costo_lote_kg:     costo_lote_kg,
       precio_final_kg:   0,
       precio_unitario:   0,
@@ -830,10 +954,10 @@ function crearRFQ(body) {
     var estadoProceso = (item.estado_proceso || 'Verde').toLowerCase();
     var aplicables = filterArr(costosEstandar, function(c) {
       if (c.activo === false || c.activo === 'FALSE') return false;
-      var tierOk = !c.tier || c.tier === '*' || c.tier === item.tier;
+      var etiquetasOk = _etiquetasMatch(c.etiquetas, item.etiquetas);
       var procOk = !c.presentacion || c.presentacion === '*' ||
                    c.presentacion.toLowerCase() === estadoProceso;
-      return tierOk && procOk;
+      return etiquetasOk && procOk;
     });
 
     for (var j = 0; j < aplicables.length; j++) {
