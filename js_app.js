@@ -653,6 +653,143 @@ function onTasaChange() {
   recalcGrandTotalsAllItems();
 }
 
+// ── Imprimir cotización ───────────────────────────────────
+
+function imprimirCotizacion() {
+  if (!cotState) return toast('⚠️ No hay cotización cargada');
+
+  var problemas = [];
+
+  if (Object.keys(pendingEdits).length)      problemas.push('costos editados sin guardar');
+  if (pendingNew.length)                     problemas.push('costos nuevos sin guardar');
+  if (Object.keys(pendingComisiones).length) problemas.push('comisiones modificadas sin guardar');
+
+  document.querySelectorAll('textarea[data-perfil-item]').forEach(function(ta) {
+    var item = cotState.items.filter(function(i) { return i.cot_item_id === ta.dataset.perfilItem; })[0];
+    if (item && ta.value.trim() !== (item.perfil_sensorial || '').trim()) {
+      problemas.push('perfil sensorial sin guardar');
+    }
+  });
+
+  document.querySelectorAll('select[data-lote-selector]').forEach(function(sel) {
+    if (sel.dataset.loteOriginal !== sel.value) problemas.push('lote modificado sin guardar');
+  });
+
+  if (problemas.length) {
+    alert('Hay cambios sin guardar:\n• ' + problemas.join('\n• ') + '\n\nGuarda la cotización antes de imprimir.');
+    return;
+  }
+
+  construirVistaImpresion();
+  window.print();
+}
+
+function construirVistaImpresion() {
+  var cot        = cotState.cotizacion;
+  var items      = cotState.items;
+  var costos     = cotState.costos;
+  var tasas      = cotState.tasas      || [];
+  var comisiones = cotState.comisiones || [];
+  var rfqItems   = cotState.rfqItems   || [];
+  var monedaRFQ  = (cot.moneda_solicitada || 'USD').toUpperCase();
+  var rawDate    = cot.updated_at || cot.created_at || '';
+  var fecha      = rawDate ? String(rawDate).slice(0, 10) : new Date().toISOString().slice(0, 10);
+  var tUSD       = parseFloat(tasaUSD || 0);
+  var tEUR       = parseFloat(tasaEUR || 0);
+
+  // ── Cover ────────────────────────────────────────────────
+  document.getElementById('print-cover-title').textContent = 'Special Coffee \u2014 ' + (cot.cliente || '');
+  document.getElementById('print-cover-date').textContent  = fecha;
+
+  // ── Content header ───────────────────────────────────────
+  var metaHtml =
+    '<div class="print-meta">' +
+      '<span>' + (cot.cliente || '') + '</span>' +
+      '<span>' + monedaRFQ + '</span>' +
+      '<span>' + fecha + '</span>' +
+    '</div>';
+  if (cot.header) {
+    metaHtml += '<div class="print-doc-header">' + (cot.header || '') + '</div>';
+  }
+  document.getElementById('print-header-section').innerHTML = metaHtml;
+
+  // ── Table currency header ────────────────────────────────
+  document.getElementById('print-table-currency-header').textContent = 'Gran Total (' + monedaRFQ + ')';
+
+  // ── Grand total per item ─────────────────────────────────
+  var activeItems  = items.filter(function(item) {
+    return !(item.ignorado === true || String(item.ignorado).toUpperCase() === 'TRUE');
+  });
+  var globalCostos = costos.filter(function(c) { return !c.cot_item_id; });
+  var totalKgTodos = 0;
+  activeItems.forEach(function(item) {
+    var f = factorPresentacion(item.presentacion, item.cantidad_unidades);
+    var c = parseFloat(item.cantidad_unidades || 0);
+    totalKgTodos += item.presentacion === 'Granel' ? c : c * f;
+  });
+
+  var rows = activeItems.map(function(item) {
+    var rfqItem    = rfqItems.filter(function(r) { return r.rfq_item_id === item.rfq_item_id; })[0] || {};
+    var factor     = factorPresentacion(item.presentacion, item.cantidad_unidades);
+    var cant       = parseFloat(item.cantidad_unidades || 0);
+    var cantKg     = item.presentacion === 'Granel' ? cant : cant * factor;
+    var loteCosto  = parseFloat(item.costo_lote_kg || 0);
+    var itemCostos = costos.filter(function(c) { return c.cot_item_id === item.cot_item_id; });
+
+    var sumaCOP = itemCostos.reduce(function(s, c) {
+      return s + aCOP(parseFloat(c.valor_kg || 0), c.moneda, tUSD, tEUR);
+    }, 0);
+    var pfKgCOP = loteCosto + sumaCOP;
+    var puCOP   = pfKgCOP * factor;
+    var totCOP  = item.presentacion === 'Granel' ? puCOP : puCOP * cant;
+
+    var prorCOP = 0;
+    if (globalCostos.length && totalKgTodos > 0) {
+      var prop = cantKg / totalKgTodos;
+      globalCostos.forEach(function(gc) {
+        prorCOP += aCOP(parseFloat(gc.valor_kg || 0), gc.moneda, tUSD, tEUR) * prop;
+      });
+    }
+
+    var tasaCOP = 0;
+    tasas.forEach(function(tasa) {
+      var override = comisiones.filter(function(c) {
+        return String(c.cot_item_id) === String(item.cot_item_id)
+            && String(c.tasa_id) === String(tasa.tasa_id);
+      })[0];
+      var tv    = override ? parseFloat(override.tasa_valor) : parseFloat(tasa.tasa_valor || 0);
+      var nivel = parseFloat(tasa.incoterm_aplicable || 0);
+      var base  = calcIncotermTotal(loteCosto, itemCostos, nivel, tUSD, tEUR, factor, cant, item.presentacion);
+      var desc  = tasa.descuenta === true || String(tasa.descuenta).toUpperCase() === 'TRUE';
+      tasaCOP += base * (tv / 100) * (desc ? -1 : 1);
+    });
+
+    var grandCOP = totCOP + prorCOP + tasaCOP;
+    var grandMon = monedaRFQ === 'USD' && tUSD > 0 ? grandCOP / tUSD
+                 : monedaRFQ === 'EUR' && tEUR > 0 ? grandCOP / tEUR : grandCOP;
+
+    var fechaRaw = rfqItem.fecha_requerida;
+    var fechaReq = fechaRaw
+      ? (fechaRaw instanceof Date ? fechaRaw.toISOString().slice(0, 10) : String(fechaRaw).slice(0, 10))
+      : '\u2014';
+
+    return '<tr>' +
+      '<td>' + (item.variedad       || '\u2014') + '</td>' +
+      '<td>' + (item.origen         || '\u2014') + '</td>' +
+      '<td>' + fechaReq                          + '</td>' +
+      '<td>' + cant + ' ' + labelUnidad(item.presentacion) + '</td>' +
+      '<td>' + (item.presentacion   || '\u2014') + '</td>' +
+      '<td>' + (item.estado_proceso || '\u2014') + '</td>' +
+      '<td>' + formatMon(grandMon, monedaRFQ)    + '</td>' +
+    '</tr>';
+  }).join('');
+
+  document.getElementById('print-table-body').innerHTML = rows;
+
+  // ── Document footer ──────────────────────────────────────
+  document.getElementById('print-footer-content').textContent = cot.footer || '';
+}
+
 async function saveCotizacion() {
   if (!currentCotId) return toast('⚠️ No hay cotización cargada');
 

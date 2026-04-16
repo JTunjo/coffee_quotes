@@ -4,6 +4,9 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Sistema de Cotización de Café</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
@@ -105,6 +108,110 @@
   .mt-1    { margin-top: .75rem; }
   .mb-1    { margin-bottom: .75rem; }
   .text-muted { color: var(--muted); font-size: .8rem; }
+
+  /* ── Screen: hide print container ───────────────────── */
+  #print-container { display: none; }
+
+  /* ── Print ───────────────────────────────────────────── */
+  @media print {
+    body > *:not(#print-container) { display: none !important; }
+    #print-container { display: block !important; margin: 0; padding: 0; }
+
+    /* Cover — page 1 */
+    #print-cover {
+      width: 100%; height: 100vh;
+      page-break-after: always;
+      background-image: url('cover-placeholder.jpg');
+      background-size: cover; background-position: center;
+      background-color: #004722;
+      position: relative; z-index: 10;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+    }
+    #print-cover-overlay {
+      position: absolute; inset: 0;
+      background: rgba(0, 71, 34, 0.6);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 11;
+    }
+    #print-cover-title {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 23pt; font-weight: 600;
+      color: #fff; text-align: center;
+      padding: 0 2cm; line-height: 1.4;
+    }
+    #print-cover-date {
+      position: absolute; bottom: 1.5cm;
+      width: 100%; text-align: center;
+      font-family: 'Montserrat', sans-serif;
+      font-size: 10pt; font-weight: 700;
+      color: #fff; z-index: 12;
+    }
+
+    /* Content — pages 2+ */
+    #print-content {
+      padding: .8cm 1cm 2.5cm;
+      font-family: 'Montserrat', sans-serif;
+      font-size: 10pt; color: #1a1a1a;
+    }
+    #print-header-section {
+      margin-bottom: .75cm; padding-bottom: .5cm;
+      border-bottom: 2px solid #004722;
+    }
+    .print-meta {
+      display: flex; gap: 2rem;
+      font-size: 12pt; font-weight: 600;
+      color: #004722; margin-bottom: .4cm;
+    }
+    .print-doc-header {
+      font-size: 9pt; color: #333;
+      line-height: 1.6; white-space: pre-line;
+    }
+
+    /* Items table */
+    #print-items-table {
+      width: 100%; border-collapse: collapse;
+      font-size: 9pt; font-family: 'Montserrat', sans-serif;
+      margin-bottom: .75cm;
+    }
+    #print-items-table th {
+      background: #004722 !important; color: #fff !important;
+      padding: .3cm .4cm; text-align: left; font-weight: 700;
+      -webkit-print-color-adjust: exact; print-color-adjust: exact;
+    }
+    #print-items-table td {
+      padding: .28cm .4cm;
+      border-bottom: 1px solid #ddd; vertical-align: middle;
+    }
+    #print-items-table tr:nth-child(even) td {
+      background: #f7f7f2 !important;
+      -webkit-print-color-adjust: exact; print-color-adjust: exact;
+    }
+
+    /* Document footer text */
+    #print-footer-content {
+      font-size: 8.5pt; color: #555;
+      line-height: 1.5; white-space: pre-line;
+      border-top: 1px solid #ccc;
+      padding-top: .4cm; margin-top: .5cm;
+    }
+
+    /* Running footer — logo left, page number right */
+    #print-page-footer {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      height: 1.2cm;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 1cm;
+      border-top: 1px solid #ccc;
+      background: #fff !important;
+      font-size: 8pt; color: #666;
+      font-family: 'Montserrat', sans-serif;
+      z-index: 5;
+      -webkit-print-color-adjust: exact; print-color-adjust: exact;
+    }
+    #print-logo { height: .8cm; width: auto; }
+    .print-page-counter::before { content: counter(page); }
+  }
 </style>
 </head>
 <body>
@@ -286,7 +393,7 @@
 
       <div id="botones-cotizacion" class="flex gap-1" style="justify-content:flex-end;margin-top:.5rem">
         <button class="btn btn-ghost" onclick="resetEditor()">↺ Descartar</button>
-        <button id="btn-imprimir" class="btn btn-ghost" onclick="window.print()" disabled
+        <button id="btn-imprimir" class="btn btn-ghost" onclick="imprimirCotizacion()" disabled
           title="Resuelve los ítems sin disponibilidad para imprimir">🖨 Imprimir</button>
         <button class="btn btn-primary" onclick="saveCotizacion()">💾 Guardar Cotización</button>
       </div>
@@ -372,6 +479,47 @@
       <button class="btn btn-primary" onclick="guardarEditarRFQ()">💾 Guardar cambios</button>
     </div>
   </div>
+</div>
+
+<!-- ── Print container (hidden on screen, rendered when printing) ── -->
+<div id="print-container" aria-hidden="true">
+
+  <!-- Page 1: Cover -->
+  <div id="print-cover">
+    <div id="print-cover-overlay">
+      <div id="print-cover-title"></div>
+    </div>
+    <div id="print-cover-date"></div>
+  </div>
+
+  <!-- Pages 2+: Content -->
+  <div id="print-content">
+    <div id="print-header-section"></div>
+
+    <table id="print-items-table">
+      <thead>
+        <tr>
+          <th>Variedad</th>
+          <th>Origen</th>
+          <th>Fecha requerida</th>
+          <th>Cantidad</th>
+          <th>Presentación</th>
+          <th>Estado Proceso</th>
+          <th id="print-table-currency-header">Gran Total</th>
+        </tr>
+      </thead>
+      <tbody id="print-table-body"></tbody>
+    </table>
+
+    <div id="print-footer-content"></div>
+  </div>
+
+  <!-- Running footer on every page (cover is hidden behind it via z-index) -->
+  <div id="print-page-footer">
+    <img id="print-logo" src="logo-placeholder.png" alt="Logo" />
+    <span class="print-page-counter"></span>
+  </div>
+
 </div>
 
 <script src="js_api.js"></script>
