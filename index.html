@@ -121,17 +121,21 @@
     #print-cover {
       width: 100%; height: 100vh;
       page-break-after: always;
-      background-image: url('https://raw.githubusercontent.com/JTunjo/asset_hosting/refs/heads/main/coffee_background.png');
-      background-size: cover; background-position: center;
-      background-color: #1a1a1a;
       position: relative; z-index: 10;
+      overflow: hidden;
       display: flex; flex-direction: column;
       align-items: center; justify-content: center;
       -webkit-print-color-adjust: exact; print-color-adjust: exact;
     }
+    #print-cover-bg {
+      position: absolute; top: 0; left: 0;
+      width: 100%; height: 100%;
+      object-fit: cover; z-index: 0;
+    }
     #print-cover-logo {
       position: absolute; top: 2cm;
       height: 2.2cm; width: auto;
+      z-index: 2;
     }
     #print-cover-box {
       background: rgba(0, 71, 34, 0.72);
@@ -139,6 +143,7 @@
       padding: 1.1cm 2cm;
       text-align: center;
       max-width: 72%;
+      position: relative; z-index: 2;
       -webkit-print-color-adjust: exact; print-color-adjust: exact;
     }
     #print-cover-title {
@@ -152,7 +157,7 @@
       width: 100%; text-align: center;
       font-family: 'Montserrat', sans-serif;
       font-size: 10pt; font-weight: 700;
-      color: #fff;
+      color: #fff; z-index: 2;
     }
 
     /* Content — pages 2+ */
@@ -232,7 +237,22 @@
       -webkit-print-color-adjust: exact; print-color-adjust: exact;
     }
     #print-logo { height: .8cm; width: auto; }
-    .print-page-counter::before { content: counter(page); }
+  }
+
+  /* @page rules apply to paged media regardless of @media print */
+  @page {
+    margin-bottom: 1.8cm;
+    @bottom-right {
+      content: counter(page);
+      font-family: 'Montserrat', sans-serif;
+      font-size: 8pt;
+      color: #666;
+      padding-right: .5cm;
+    }
+  }
+  /* Suppress page number on cover */
+  @page :first {
+    @bottom-right { content: none; }
   }
 </style>
 </head>
@@ -508,7 +528,8 @@
 
   <!-- Page 1: Cover -->
   <div id="print-cover">
-    <img id="print-cover-logo" src="logo-placeholder.png" alt="Logo" />
+    <img id="print-cover-bg" src="https://raw.githubusercontent.com/JTunjo/asset_hosting/refs/heads/main/coffee_background.png" alt="" onerror="this.style.display='none'" />
+    <img id="print-cover-logo" src="https://raw.githubusercontent.com/JTunjo/asset_hosting/refs/heads/main/Velvet_color.png" alt="Logo" onerror="this.style.display='none'" />
     <div id="print-cover-box">
       <div id="print-cover-title"></div>
     </div>
@@ -534,14 +555,13 @@
       <tbody id="print-table-body"></tbody>
     </table>
 
-    <div id="print-footer-content"></div>
     <div id="print-grand-total"></div>
+    <div id="print-footer-content"></div>
   </div>
 
   <!-- Running footer on every page (cover is hidden behind it via z-index) -->
   <div id="print-page-footer">
-    <img id="print-logo" src="https://raw.githubusercontent.com/JTunjo/asset_hosting/refs/heads/main/Velvet_color.png" alt="Logo" />
-    <span class="print-page-counter"></span>
+    <img id="print-logo" src="https://raw.githubusercontent.com/JTunjo/asset_hosting/refs/heads/main/Velvet_color.png" alt="Logo" onerror="this.style.display='none'" />
   </div>
 
 </div>
