@@ -26,6 +26,7 @@ var pendingEdits    = {};
 var pendingNew      = [];
 var pendingComisiones = {}; // { "cot_item_id_tasa_id": { cot_item_id, tasa_id, tasa_valor } }
 var variedades      = [];
+var variedadesReady = null;
 var tasaUSD         = 0;
 var tasaEUR         = 0;
 var tasasCache      = null;
@@ -124,6 +125,7 @@ function normalizarFecha(f) {
 
 async function abrirEditarRFQ(rfqId) {
   toast('⏳ Cargando RFQ...');
+  if (!variedades.length && variedadesReady) await variedadesReady;
   var res = await apiGet({ action: 'getRFQ', rfqId: rfqId });
   if (!res.ok) return toast('❌ ' + res.error);
 
@@ -174,10 +176,11 @@ function crearFilaEditItem(item) {
 }
 
 function buildVariedadOptions(selected) {
+  var sel  = selected ? String(selected).trim() : '';
   var opts = '<option value="">Selecciona…</option>';
   for (var i = 0; i < variedades.length; i++) {
     opts += '<option value="' + variedades[i] + '"' +
-      (variedades[i] === selected ? ' selected' : '') + '>' +
+      (variedades[i] === sel ? ' selected' : '') + '>' +
       variedades[i] + '</option>';
   }
   return opts;
@@ -488,14 +491,15 @@ async function loadRFQList() {
     return;
   }
 
-  // Cargar todas las cotizaciones de una vez
-  var resCots = await apiGet({ action: 'listRFQs' });
-  // Usamos listCotizaciones si existiera, pero por ahora cargamos por RFQ
-  // Construimos las filas secuencialmente
+  var rfqs       = resRFQ.rfqs;
+  var cotResults = await Promise.all(
+    rfqs.map(function(r) { return apiGet({ action: 'getCotizacionesPorRFQ', rfqId: r.rfq_id }); })
+  );
+
   tbody.innerHTML = '';
-  for (var i = 0; i < resRFQ.rfqs.length; i++) {
-    var r   = resRFQ.rfqs[i];
-    var res = await apiGet({ action: 'getCotizacionesPorRFQ', rfqId: r.rfq_id });
+  for (var i = 0; i < rfqs.length; i++) {
+    var r    = rfqs[i];
+    var res  = cotResults[i];
     var cots = (res.ok && res.cotizaciones) ? res.cotizaciones : [];
 
     var optsHtml = cots.map(function(c) {
@@ -978,7 +982,7 @@ function init() {
   addRfqItem(); // render form immediately, no API wait
 
   // Load variedades in background — updates dropdowns when ready
-  apiGet({ action: 'getVariedades' }).then(function(res) {
+  variedadesReady = apiGet({ action: 'getVariedades' }).then(function(res) {
     if (res && res.ok && res.variedades && res.variedades.length) {
       variedades = res.variedades.map(function(v) { return String(v.nombre).trim(); });
       refreshVariedadSelects();
