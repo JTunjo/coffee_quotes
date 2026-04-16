@@ -374,6 +374,32 @@ function renderCotizacion(data, soloLectura, resultadosDisp) {
         '</div>';
     }
 
+    // ── Gran Total por ítem (DDP + globales prorrateados + tasas) ─
+    var grandProrCOP = 0;
+    if (globalCostos.length && totalKgTodos > 0) {
+      var gProp = cantKg / totalKgTodos;
+      globalCostos.forEach(function(gc) {
+        grandProrCOP += aCOP(parseFloat(gc.valor_kg || 0), gc.moneda, tUSD, tEUR) * gProp;
+      });
+    }
+    var grandTasaCOP = 0;
+    tasas.forEach(function(tasa) {
+      var ov    = comisiones.filter(function(c) {
+        return String(c.cot_item_id) === String(item.cot_item_id)
+            && String(c.tasa_id) === String(tasa.tasa_id);
+      })[0];
+      var tv    = ov ? parseFloat(ov.tasa_valor) : parseFloat(tasa.tasa_valor || 0);
+      var nivel = parseFloat(tasa.incoterm_aplicable || 0);
+      var base  = calcIncotermTotal(parseFloat(item.costo_lote_kg || 0), itemCostos, nivel, tUSD, tEUR, factor, cant, item.presentacion);
+      var desc  = tasa.descuenta === true || String(tasa.descuenta).toUpperCase() === 'TRUE';
+      grandTasaCOP += base * (tv / 100) * (desc ? -1 : 1);
+    });
+    var grandTotCOP = totalCOP + grandProrCOP + grandTasaCOP;
+    var grandTotMon = monedaRFQ === 'USD' && tUSD > 0 ? grandTotCOP / tUSD
+                    : monedaRFQ === 'EUR' && tEUR > 0 ? grandTotCOP / tEUR : grandTotCOP;
+    var grandPkgMon = cantKg > 0 ? grandTotMon / cantKg : 0;
+    var grandPpuMon = cant   > 0 ? grandTotMon / cant   : 0;
+
     var card = document.createElement('div');
     card.className = 'card';
     card.dataset.cotItemId = item.cot_item_id;
@@ -524,6 +550,16 @@ function renderCotizacion(data, soloLectura, resultadosDisp) {
             '>' + (item.perfil_sensorial || '') + '</textarea>'
         ) +
       '</div>' +
+      // ── Gran Total del Ítem ───────────────────────────────
+      '<div style="margin-top:1rem;padding-top:.75rem;border-top:2px solid var(--border)">' +
+        '<div style="font-size:.8rem;font-weight:700;color:var(--accent2);margin-bottom:.5rem">Gran Total del Ítem</div>' +
+        '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:.5rem">' +
+          itemGrandCard('Gran Total COP',          'gtot-cop-' + item.cot_item_id, formatCOP(grandTotCOP))                    +
+          itemGrandCard('Gran Total ' + monedaRFQ, 'gtot-mon-' + item.cot_item_id, formatMon(grandTotMon, monedaRFQ), true)   +
+          itemGrandCard(monedaRFQ + '/Kg',          'gpkg-mon-' + item.cot_item_id, formatMon(grandPkgMon, monedaRFQ))        +
+          itemGrandCard(monedaRFQ + '/Und',         'gppu-mon-' + item.cot_item_id, formatMon(grandPpuMon, monedaRFQ))        +
+        '</div>' +
+      '</div>' +
       (!soloLectura ? '<p class="text-muted mt-1">cot_item_id: <code>' + item.cot_item_id + '</code></p>' : '');
 
     section.appendChild(card);
@@ -590,6 +626,7 @@ function recalcItemUI(itemId, loteCosto, cantidad, presentacion) {
   el = document.getElementById('tot-cop-' + itemId); if (el) el.textContent = formatCOP(totalCOP);
   el = document.getElementById('tot-usd-' + itemId); if (el) el.textContent = formatUSD(totalUSD);
   el = document.getElementById('tot-eur-' + itemId); if (el) el.textContent = formatEUR(totalEUR);
+  recalcGrandTotalsAllItems();
 }
 
 // ── Resumen multicurrency ─────────────────────────────────
@@ -794,6 +831,94 @@ function summaryCard(label, valor, resaltado) {
     '<div style="font-size:.75rem;opacity:.8;margin-bottom:.25rem">' + label + '</div>' +
     '<div style="font-size:1.05rem;font-weight:700">' + valor + '</div>' +
   '</div>';
+}
+
+function itemGrandCard(label, id, valor, resaltado) {
+  var bg     = resaltado ? 'background:var(--accent);color:#fff' : 'background:var(--bg)';
+  var border = resaltado ? 'border:2px solid var(--accent)' : 'border:1px solid var(--border)';
+  return '<div style="' + bg + ';' + border + ';border-radius:var(--radius);padding:.6rem;text-align:center">' +
+    '<div style="font-size:.7rem;opacity:.8;margin-bottom:.2rem">' + label + '</div>' +
+    '<strong id="' + id + '" style="font-size:.88rem">' + valor + '</strong>' +
+  '</div>';
+}
+
+function recalcGrandTotalsAllItems() {
+  if (!cotState) return;
+  var tUSD         = parseFloat(tasaUSD || 0);
+  var tEUR         = parseFloat(tasaEUR || 0);
+  var monRFQ       = (cotState.cotizacion.moneda_solicitada || 'USD').toUpperCase();
+  var items        = cotState.items;
+  var costos       = cotState.costos;
+  var tasas        = cotState.tasas      || [];
+  var comisiones   = cotState.comisiones || [];
+  var globalCostos = costos.filter(function(c) { return !c.cot_item_id; });
+
+  var totalKgTodos = 0;
+  items.forEach(function(item) {
+    var f = factorPresentacion(item.presentacion, item.cantidad_unidades);
+    var c = parseFloat(item.cantidad_unidades || 0);
+    totalKgTodos += item.presentacion === 'Granel' ? c : c * f;
+  });
+
+  items.forEach(function(item) {
+    var factor     = factorPresentacion(item.presentacion, item.cantidad_unidades);
+    var cant       = parseFloat(item.cantidad_unidades || 0);
+    var cantKg     = item.presentacion === 'Granel' ? cant : cant * factor;
+    var loteCosto  = parseFloat(item.costo_lote_kg || 0);
+    var itemCostos = costos.filter(function(c) { return c.cot_item_id === item.cot_item_id; });
+
+    // DDP total (live inputs when editable, otherwise cotState values)
+    var inputs  = document.querySelectorAll('[data-item-id="' + item.cot_item_id + '"]');
+    var sumaCOP = 0;
+    if (inputs.length > 0) {
+      inputs.forEach(function(inp) {
+        sumaCOP += aCOP(parseFloat(inp.value || 0), inp.dataset.moneda || 'COP', tUSD, tEUR);
+      });
+    } else {
+      itemCostos.forEach(function(c) {
+        sumaCOP += aCOP(parseFloat(c.valor_kg || 0), c.moneda, tUSD, tEUR);
+      });
+    }
+    var pfKgCOP = loteCosto + sumaCOP;
+    var puCOP   = pfKgCOP * factor;
+    var totCOP  = item.presentacion === 'Granel' ? puCOP : puCOP * cant;
+
+    // Prorrated global costos
+    var prorCOP = 0;
+    if (globalCostos.length && totalKgTodos > 0) {
+      var prop = cantKg / totalKgTodos;
+      globalCostos.forEach(function(gc) {
+        prorCOP += aCOP(parseFloat(gc.valor_kg || 0), gc.moneda, tUSD, tEUR) * prop;
+      });
+    }
+
+    // Tasa contributions (pending overrides take priority)
+    var tasaCOP = 0;
+    tasas.forEach(function(tasa) {
+      var key      = item.cot_item_id + '_' + tasa.tasa_id;
+      var override = pendingComisiones[key] || comisiones.filter(function(c) {
+        return String(c.cot_item_id) === String(item.cot_item_id)
+            && String(c.tasa_id) === String(tasa.tasa_id);
+      })[0];
+      var tv    = override ? parseFloat(override.tasa_valor) : parseFloat(tasa.tasa_valor || 0);
+      var nivel = parseFloat(tasa.incoterm_aplicable || 0);
+      var base  = calcIncotermTotal(loteCosto, itemCostos, nivel, tUSD, tEUR, factor, cant, item.presentacion);
+      var desc  = tasa.descuenta === true || String(tasa.descuenta).toUpperCase() === 'TRUE';
+      tasaCOP += base * (tv / 100) * (desc ? -1 : 1);
+    });
+
+    var grandCOP = totCOP + prorCOP + tasaCOP;
+    var grandMon = monRFQ === 'USD' && tUSD > 0 ? grandCOP / tUSD
+                 : monRFQ === 'EUR' && tEUR > 0 ? grandCOP / tEUR : grandCOP;
+    var pkgMon   = cantKg > 0 ? grandMon / cantKg : 0;
+    var ppuMon   = cant   > 0 ? grandMon / cant   : 0;
+
+    var el;
+    el = document.getElementById('gtot-cop-' + item.cot_item_id); if (el) el.textContent = formatCOP(grandCOP);
+    el = document.getElementById('gtot-mon-' + item.cot_item_id); if (el) el.textContent = formatMon(grandMon, monRFQ);
+    el = document.getElementById('gpkg-mon-' + item.cot_item_id); if (el) el.textContent = formatMon(pkgMon,   monRFQ);
+    el = document.getElementById('gppu-mon-' + item.cot_item_id); if (el) el.textContent = formatMon(ppuMon,   monRFQ);
+  });
 }
 
 function renderSummaryFromState() {

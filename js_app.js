@@ -650,6 +650,7 @@ function onTasaChange() {
     );
   });
   renderSummaryFromState();
+  recalcGrandTotalsAllItems();
 }
 
 async function saveCotizacion() {
@@ -924,6 +925,7 @@ function onComisionChange(input) {
   if (copEl) copEl.textContent = Math.round(valor).toLocaleString('es-CO') + ' COP';
   if (usdEl) usdEl.textContent = formatUSD(valorUSD);
   if (eurEl) eurEl.textContent = formatEUR(valorEUR);
+  recalcGrandTotalsAllItems();
 }
 
 // ── Ignorar ítem ──────────────────────────────────────────
