@@ -175,16 +175,6 @@ function crearFilaEditItem(item) {
   return div;
 }
 
-function buildVariedadOptions(selected) {
-  var sel  = selected ? String(selected).trim() : '';
-  var opts = '<option value="">Selecciona…</option>';
-  for (var i = 0; i < variedades.length; i++) {
-    opts += '<option value="' + variedades[i] + '"' +
-      (variedades[i] === sel ? ' selected' : '') + '>' +
-      variedades[i] + '</option>';
-  }
-  return opts;
-}
 
 function cerrarEditarRFQ() {
   document.getElementById('modal-edit-rfq').classList.remove('show');
@@ -321,13 +311,14 @@ async function guardarFila(btn) {
 
 
 
-function buildVariedadOptions() {
+function buildVariedadOptions(selected) {
   if (!variedades.length) {
     return '<option value="">— Sin variedades cargadas —</option>';
   }
+  var sel = selected ? String(selected).trim() : '';
   return '<option value="">Selecciona…</option>' +
     variedades.map(function(v) {
-      return '<option value="' + v + '">' + v + '</option>';
+      return '<option value="' + v + '"' + (v === sel ? ' selected' : '') + '>' + v + '</option>';
     }).join('');
 }
 
