@@ -1,5 +1,33 @@
 # Changelog
 
+## FAQ
+
+**Q: Why are the source files in NDJSON format instead of standard JSON arrays?**
+The files contain one JSON object per line (newline-delimited JSON). This is common for data exports because it allows streaming — you can process one record at a time without loading the entire file into memory. Standard `json.load()` fails on these files, so we read them line by line with `json.loads()`.
+
+**Q: Why use a left join instead of an inner join when merging the two files?**
+`movies.json` has 520 records but `movie-detail.json` only has 516. A left join keeps all movies and fills missing detail fields with NaN. An inner join would silently drop 4 movies. Since those 4 get `budget_usd = 0` and `year = 0`, they are naturally excluded by the output filter without any special handling.
+
+**Q: Why does `clean_budget` return 0 for pure non-USD entries like `£65,000` instead of converting them?**
+All 15 pure GBP entries in the dataset belong to old films (1930s–1950s) with budgets well under $1M. Since the output filter requires a minimum of $15M USD, they would be excluded regardless. Returning 0 is the safe, honest choice — it avoids inventing exchange rates that were not part of the requirements.
+
+**Q: Why does the range rule take the greater value instead of the average or the lower value?**
+The assignment explicitly states this: "Any budget that is a range, we should use the greater of the two." We follow the spec exactly.
+
+**Q: Why use DuckDB instead of just filtering the pandas DataFrame directly?**
+The assignment requires DuckDB integration as a core deliverable — a query function and an export function. DuckDB also lets you express the filter logic as plain SQL, which is readable and easy to audit. The `COPY ... TO` syntax handles CSV, JSON, and Parquet export natively without extra dependencies.
+
+**Q: Why is the year extracted from `release_dates` in `movie-detail.json` rather than from the film title or `detail_url`?**
+The `detail_url` often contains the year in parentheses (e.g. `Wings_(1927_film)`) but not always. The `release_dates` field always contains a full date string and reliably yields the first 4-digit year for all 516 detail records. It is also semantically the correct field.
+
+**Q: Why is `original_budget` kept as a string in the output CSV?**
+The assignment asks for both the original budget and the converted USD value. Keeping the raw string lets the reader verify the conversion without having to go back to the source data.
+
+**Q: Why are there 32 records in the output instead of more?**
+The filter applies three conditions together: the film must have won an Oscar (`winner = true`), the release year must be after 1955 (`year > 1955`), and the cleaned budget must be at least $15,000,000 (`budget_usd >= 15000000`). Many winners from that period have null or sub-$15M budgets in the dataset, so they are excluded.
+
+---
+
 | Timestamp | Label | Detail |
 |-----------|-------|--------|
 | 2026-04-21 | Step 1 — Project structure | Created `etl/__init__.py`, `etl/cleaner.py`, `etl/db.py`, `main.py`, `requirements.txt`, `output/` directory, and `README.md` inside `test/` |
