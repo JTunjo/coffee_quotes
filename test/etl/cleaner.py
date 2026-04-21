@@ -1,3 +1,4 @@
+import math
 import re
 
 
@@ -47,7 +48,7 @@ def clean_budget(value) -> int:
     - 'or' alternatives (e.g. '$2.2m or $1.8m') → take the greater value
     - Single USD amount → parse directly
     """
-    if value is None or str(value).strip() == '':
+    if value is None or (isinstance(value, float) and math.isnan(value)) or str(value).strip() == '':
         return 0
 
     s = _strip_noise(str(value))

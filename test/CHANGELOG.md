@@ -9,3 +9,9 @@
 | 2026-04-21 | Step 3 — README update | Added Cleaning functions table documenting inputs, outputs, and behaviour of each function |
 | 2026-04-21 | Step 4 — db.py | Implemented `get_connection`, `register_dataframe`, `query_data`, `export_data` in `etl/db.py`; smoke-tested CSV, JSON, and Parquet export plus invalid-format error |
 | 2026-04-21 | Step 4 — README update | Added DuckDB functions table to README |
+| 2026-04-21 | Step 5 — main.py | Implemented full pipeline: load both NDJSON files, left-join on `detail_url`, apply cleaners, register in DuckDB, query Oscar winners (year > 1955, budget_usd >= 15M), export to `output/oscar_winners.csv`; 32 records exported |
+| 2026-04-21 | Step 5 — cleaner.py patch | Added `math.isnan` guard to `clean_budget` to handle pandas NaN values from unmatched join rows |
+| 2026-04-21 | Step 5 — README update | Added Usage section with run instructions and output column descriptions |
+| 2026-04-21 | Step 6 — EXPLAIN.md | Created EXPLAIN.md documenting pipeline approach, all budget cleaning patterns with examples, year extraction strategy, join behaviour, and output filter logic |
+| 2026-04-21 | Step 7 — README fixes | Removed duplicate venv setup block from Usage section; corrected `clean_budget` return type description from "USD cents" to "USD dollars" |
+| 2026-04-21 | Step 7 — Final review | Clean end-to-end run confirmed: 32 records exported to `output/oscar_winners.csv`; all deliverables present |

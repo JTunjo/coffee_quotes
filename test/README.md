@@ -46,7 +46,23 @@ pip install -r requirements.txt
 
 ## Usage
 
-_To be documented as each step is completed._
+After completing installation above:
+
+```bash
+python3 main.py
+```
+
+Output is written to `output/oscar_winners.csv`.
+
+### Exported columns
+
+| Column | Description |
+|---|---|
+| `film` | Movie title |
+| `year` | Release year |
+| `wikipedia_url` | Wikipedia page URL |
+| `original_budget` | Raw budget string from source data |
+| `budget_usd` | Cleaned budget as integer USD |
 
 ## DuckDB functions (`etl/db.py`)
 
@@ -61,6 +77,6 @@ _To be documented as each step is completed._
 
 | Function | Input | Output | Notes |
 |---|---|---|---|
-| `clean_budget(value)` | raw budget string or None | `int` (USD cents) | Handles nulls, footnotes, "X million", ranges (takes max), pure non-USD → 0, non-USD with USD in parens → extracts USD |
+| `clean_budget(value)` | raw budget string or None | `int` (USD dollars) | Handles nulls, footnotes, "X million", ranges (takes max), pure non-USD → 0, non-USD with USD in parens → extracts USD |
 | `clean_year(release_dates)` | raw release dates string | `int` | Extracts first 4-digit year; 0 if not found |
 | `clean_text(value)` | any string | `str` | Strips and collapses whitespace |
