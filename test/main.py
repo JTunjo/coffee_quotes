@@ -38,13 +38,16 @@ def build_dataset() -> pd.DataFrame:
     df_movies = pd.DataFrame(load_ndjson(DATA_DIR / 'movies.json'))
     df_details = pd.DataFrame(load_ndjson(DATA_DIR / 'movie-detail.json'))
 
-    df = df_movies.merge(df_details, on='detail_url', how='left')
-
-    df['film'] = df['film'].apply(clean_text)
-    df['year'] = df['release_dates'].apply(clean_year)
-    df['original_budget'] = df['budget'].fillna('').astype(str)
-    df['budget_usd'] = df['budget'].apply(clean_budget)
-    df = df.rename(columns={'wiki_url': 'wikipedia_url'})
+    df = (
+        df_movies.merge(df_details, on='detail_url', how='left')
+        .rename(columns={'wiki_url': 'wikipedia_url'})
+        .assign(
+            film=lambda d: d['film'].apply(clean_text),
+            year=lambda d: d['release_dates'].apply(clean_year),
+            original_budget=lambda d: d['budget'].fillna('').astype(str),
+            budget_usd=lambda d: d['budget'].apply(clean_budget),
+        )
+    )
 
     return df
 
