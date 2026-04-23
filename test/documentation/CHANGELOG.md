@@ -43,3 +43,4 @@ The filter applies three conditions together: the film must have won an Oscar (`
 | 2026-04-21 | Step 6 — EXPLAIN.md | Created EXPLAIN.md documenting pipeline approach, all budget cleaning patterns with examples, year extraction strategy, join behaviour, and output filter logic |
 | 2026-04-21 | Step 7 — README fixes | Removed duplicate venv setup block from Usage section; corrected `clean_budget` return type description from "USD cents" to "USD dollars" |
 | 2026-04-21 | Step 7 — Final review | Clean end-to-end run confirmed: 32 records exported to `output/oscar_winners.csv`; all deliverables present |
+| 2026-04-21 | Reorganisation | Created `source/` and `documentation/` directories; moved JSON data files to `source/`, moved EXPLAIN.md, CHANGELOG.md and PDF to `documentation/`; updated `DATA_DIR` in `main.py` and project structure in `README.md` |

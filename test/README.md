@@ -6,14 +6,20 @@ Python ETL toolkit for cleaning and analyzing Oscar-nominated movies (1927–201
 
 ```
 test/
+├── documentation/
+│   ├── CHANGELOG.md
+│   ├── EXPLAIN.md
+│   └── ETL_Take_Home_Assignment_-_Data_Engineer_III.pdf
 ├── etl/
 │   ├── __init__.py
 │   ├── cleaner.py       # Budget and year cleaning functions
 │   └── db.py            # DuckDB query and export utilities
 ├── output/              # Generated output files land here
-├── movies.json          # Source: Oscar nominations
-├── movie-detail.json    # Source: Movie details (budget, release dates, etc.)
+├── source/
+│   ├── movies.json      # Oscar nominations
+│   └── movie-detail.json  # Movie details (budget, release dates, etc.)
 ├── main.py              # Pipeline entry point
+├── README.md
 └── requirements.txt
 ```
 
@@ -39,8 +45,8 @@ pip install -r requirements.txt
 
 ## Data notes
 
-- `movies.json` — 520 records (NDJSON), join key: `detail_url`
-- `movie-detail.json` — 516 records (NDJSON), 4 movies have no detail entry
+- `source/movies.json` — 520 records (NDJSON), join key: `detail_url`
+- `source/movie-detail.json` — 516 records (NDJSON), 4 movies have no detail entry
 - Budget column is messy: nulls, footnote references, "X million" strings, ranges, and a small number of pure GBP entries with no USD equivalent
 - Year is extracted from the `release_dates` field using the first 4-digit year found
 

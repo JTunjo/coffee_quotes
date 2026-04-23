@@ -6,8 +6,8 @@ import pandas as pd
 from etl.cleaner import clean_budget, clean_text, clean_year
 from etl.db import export_data, get_connection, query_data, register_dataframe
 
-DATA_DIR = Path(__file__).parent
-OUTPUT_DIR = DATA_DIR / 'output'
+DATA_DIR = Path(__file__).parent / 'source'
+OUTPUT_DIR = Path(__file__).parent / 'output'
 
 WINNERS_QUERY = """
     SELECT
