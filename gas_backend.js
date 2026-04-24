@@ -22,6 +22,7 @@ var SHEETS = {
   LISTAS:                      'Listas',
   ETIQUETAS:                   'Etiquetas',
   FACTOR_PRESENTACION:         'factor_presentacion',
+  CONVERSIONES_TIPO:           'conversiones_tipo',
 };
 
 // ── Helpers generales ─────────────────────────────────────
@@ -499,6 +500,62 @@ function _recalcularCostosEstandar(cotizacionId) {
   if (nuevaFilas.length) batchAppendRows(SHEETS.COTIZACION_COSTOS, nuevaFilas);
 }
 
+// ── Conversiones de tipo de café ──────────────────────────
+
+function getConversiones() {
+  var cache  = CacheService.getScriptCache();
+  var cached = cache.get('conversiones_tipo');
+  if (cached) return JSON.parse(cached);
+  var data = sheetToObjects(SHEETS.CONVERSIONES_TIPO);
+  cache.put('conversiones_tipo', JSON.stringify(data), 21600);
+  return data;
+}
+
+function _buildConvGraph(conversiones) {
+  var graph = {};
+  for (var i = 0; i < conversiones.length; i++) {
+    var c  = conversiones[i];
+    var de = String(c.de || '').trim().toLowerCase();
+    var a  = String(c.a  || '').trim().toLowerCase();
+    var m  = parseFloat(c.merma || 0);
+    if (m > 1) m = m / 100; // normaliza si viene como 40 en vez de 0.40
+    if (!graph[de]) graph[de] = {};
+    graph[de][a] = 1 - m; // yield
+  }
+  return graph;
+}
+
+// Retorna el rendimiento compuesto (0–1) de `de` a `a`, o null si no hay camino.
+// memo se comparte entre llamadas del mismo request para evitar recalcular.
+function _computeConvFactor(de, a, graph, memo) {
+  if (de === a) return 1;
+  var key = de + '→' + a;
+  if (memo[key] !== undefined) return memo[key];
+
+  var queue   = [{ node: de, factor: 1 }];
+  var visited = {};
+  visited[de] = true;
+
+  while (queue.length) {
+    var curr      = queue.shift();
+    var neighbors = graph[curr.node] || {};
+    for (var next in neighbors) {
+      var accumulated = curr.factor * neighbors[next];
+      if (next === a) {
+        memo[key] = accumulated;
+        return accumulated;
+      }
+      if (!visited[next]) {
+        visited[next] = true;
+        queue.push({ node: next, factor: accumulated });
+      }
+    }
+  }
+
+  memo[key] = null;
+  return null;
+}
+
 // ── Verificación de disponibilidad ───────────────────────
 
 function verificarDisponibilidad(cotizacionId) {
@@ -512,8 +569,12 @@ function verificarDisponibilidad(cotizacionId) {
   var disponibles = filterArr(sheetToObjects(SHEETS.DISPONIBILIDADES),
     function(d) { return d.activo === true || d.activo === 'TRUE'; });
 
-  var resultados     = [];
-  var hayIncompletos = false;
+  var resultados        = [];
+  var hayIncompletos    = false;
+  var conversiones      = getConversiones();
+  var convGraph         = _buildConvGraph(conversiones);
+  var convMemo          = {};
+  var convHuerfanos     = {};
 
   for (var idx = 0; idx < cotItems.length; idx++) {
     var item         = cotItems[idx];
@@ -536,19 +597,41 @@ function verificarDisponibilidad(cotizacionId) {
       continue;
     }
 
-    var factor       = factorPresentacion(item.presentacion);
-    var cantidadKg   = cantidadUnid * factor;
-    var variedadItem = (item.variedad || '').toLowerCase();
-    var lotesCandidatos = filterArr(disponibles, function(d) {
-      if ((d.variedad || '').toLowerCase() !== variedadItem) return false;
+    var factor        = factorPresentacion(item.presentacion);
+    var cantidadKg    = cantidadUnid * factor;
+    var variedadItem  = (item.variedad      || '').toLowerCase();
+    var estadoProceso = (item.estado_proceso || '').toLowerCase();
+
+    var lotesCandidatos = [];
+    for (var li = 0; li < disponibles.length; li++) {
+      var d = disponibles[li];
+      if ((d.variedad || '').toLowerCase() !== variedadItem) continue;
+
       var dDesde = d.fecha_disponible_desde instanceof Date
         ? d.fecha_disponible_desde : new Date(d.fecha_disponible_desde);
       var dHasta = d.fecha_disponible_hasta instanceof Date
         ? d.fecha_disponible_hasta : new Date(d.fecha_disponible_hasta);
-      if (isNaN(dDesde.getTime()) || isNaN(dHasta.getTime())) return false;
-      return fechaReq >= dDesde && fechaReq <= dHasta &&
-             parseFloat(d.kilos_disponibles || 0) >= cantidadKg;
-    });
+      if (isNaN(dDesde.getTime()) || isNaN(dHasta.getTime())) continue;
+      if (!(fechaReq >= dDesde && fechaReq <= dHasta)) continue;
+
+      var dispTipo   = (d.presentacion || '').toLowerCase();
+      var convFactor = _computeConvFactor(dispTipo, estadoProceso, convGraph, convMemo);
+      if (convFactor === null || convFactor <= 0) {
+        var hKey = dispTipo + '→' + estadoProceso;
+        if (!convHuerfanos[hKey]) convHuerfanos[hKey] = { de: dispTipo, a: estadoProceso };
+        continue;
+      }
+
+      var requiredKg = cantidadKg / convFactor;
+      if (parseFloat(d.kilos_disponibles || 0) < requiredKg) continue;
+
+      lotesCandidatos.push({
+        lote:          d,
+        convFactor:    convFactor,
+        costoEfectivo: parseFloat(d.costo_cop_kg || 0) / convFactor,
+        requiredKg:    requiredKg,
+      });
+    }
 
     if (lotesCandidatos.length === 0) {
       _actualizarEstadoItem(item.cot_item_id, '', 0, 'sin_disponibilidad');
@@ -556,23 +639,26 @@ function verificarDisponibilidad(cotizacionId) {
                         estado: 'sin_disponibilidad', lotes: [] });
       hayIncompletos = true;
     } else {
-      lotesCandidatos.sort(function(a, b) {
-        return parseFloat(a.costo_cop_kg || 0) - parseFloat(b.costo_cop_kg || 0);
-      });
-      var loteOptimo     = lotesCandidatos[0];
-      var costo_lote_cop = parseFloat(loteOptimo.costo_cop_kg || 0);
+      lotesCandidatos.sort(function(a, b) { return a.costoEfectivo - b.costoEfectivo; });
+      var mejor          = lotesCandidatos[0];
+      var loteOptimo     = mejor.lote;
+      var costo_lote_cop = mejor.costoEfectivo;
 
       _actualizarEstadoItem(item.cot_item_id, loteOptimo.lote_id, costo_lote_cop, 'completo');
 
-      var lotesInfo = mapArr(lotesCandidatos, function(l) {
+      var lotesInfo = mapArr(lotesCandidatos, function(m) {
+        var l = m.lote;
         return {
           lote_id:                l.lote_id,
           variedad:               l.variedad,
           origen:                 l.origen,
           proceso:                l.proceso,
+          presentacion:           l.presentacion,
           costo_cop_kg:           parseFloat(l.costo_cop_kg || 0),
-          costo_cop:              parseFloat(l.costo_cop_kg || 0),
+          costo_efectivo_kg:      m.costoEfectivo,
+          factor_conversion:      m.convFactor,
           kilos_disponibles:      parseFloat(l.kilos_disponibles || 0),
+          kilos_requeridos:       m.requiredKg,
           fecha_disponible_desde: l.fecha_disponible_desde,
           fecha_disponible_hasta: l.fecha_disponible_hasta,
         };
@@ -594,7 +680,11 @@ function verificarDisponibilidad(cotizacionId) {
     function(r) { return mergeObj(r, { estado: nuevoEstado, updated_at: now() }); }
   );
 
-  return { ok: true, resultados: resultados, hay_incompletos: hayIncompletos };
+  var conversiones_faltantes = [];
+  for (var hk in convHuerfanos) conversiones_faltantes.push(convHuerfanos[hk]);
+
+  return { ok: true, resultados: resultados, hay_incompletos: hayIncompletos,
+           conversiones_faltantes: conversiones_faltantes };
 }
 
 // ── Asignar lote ──────────────────────────────────────────
@@ -606,11 +696,20 @@ function asignarLote(body) {
 
   if (!cot_item_id || !lote_id) return { ok: false, error: 'cot_item_id y lote_id requeridos' };
 
-  var lotes = sheetToObjects(SHEETS.DISPONIBILIDADES);
-  var lote  = findOne(lotes, function(l) { return l.lote_id === lote_id; });
+  var lotes   = sheetToObjects(SHEETS.DISPONIBILIDADES);
+  var lote    = findOne(lotes, function(l) { return l.lote_id === lote_id; });
   if (!lote) return { ok: false, error: 'Lote no encontrado' };
 
-  var costo_lote_cop = parseFloat(lote.costo_cop_kg || 0);
+  var cotItems = sheetToObjects(SHEETS.COTIZACION_ITEMS);
+  var cotItem  = findOne(cotItems, function(i) { return i.cot_item_id === cot_item_id; });
+  if (!cotItem) return { ok: false, error: 'Item de cotización no encontrado' };
+
+  var dispTipo      = (lote.presentacion      || '').toLowerCase();
+  var estadoProceso = (cotItem.estado_proceso  || '').toLowerCase();
+  var convFactor    = _computeConvFactor(dispTipo, estadoProceso, _buildConvGraph(getConversiones()), {});
+  if (!convFactor || convFactor <= 0) convFactor = 1;
+
+  var costo_lote_cop = parseFloat(lote.costo_cop_kg || 0) / convFactor;
 
   _actualizarEstadoItem(cot_item_id, lote_id, costo_lote_cop, 'completo');
   recalcularTotales(cotizacion_id);

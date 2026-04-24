@@ -664,7 +664,7 @@ async function loadCotizacion(cotId) {
       renderCotizacion(res2, false, vRes.resultados);
     }
 
-    renderDisponibilidadBanner(vRes.resultados);
+    renderDisponibilidadBanner(vRes.resultados, vRes.conversiones_faltantes);
     document.getElementById('btn-imprimir').disabled = vRes.hay_incompletos;
     document.getElementById('btn-imprimir').title = vRes.hay_incompletos
       ? 'Resuelve los ítems sin disponibilidad para imprimir'

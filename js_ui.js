@@ -48,24 +48,39 @@ function closeResultPopup() {
 }
 
 // ── Banner disponibilidad ─────────────────────────────────
-function renderDisponibilidadBanner(resultados) {
-  var banner   = document.getElementById('disponibilidad-banner');
-  var sinDisp  = resultados.filter(function(r) { return r.estado === 'sin_disponibilidad'; });
-  var sinFecha = resultados.filter(function(r) { return r.estado === 'sin_fecha_requerida'; });
+function renderDisponibilidadBanner(resultados, conversionesFaltantes) {
+  var banner    = document.getElementById('disponibilidad-banner');
+  var sinDisp   = resultados.filter(function(r) { return r.estado === 'sin_disponibilidad'; });
+  var sinFecha  = resultados.filter(function(r) { return r.estado === 'sin_fecha_requerida'; });
+  var huerfanos = conversionesFaltantes || [];
 
-  if (!sinDisp.length && !sinFecha.length) {
+  if (!sinDisp.length && !sinFecha.length && !huerfanos.length) {
     banner.classList.add('hidden');
     return;
   }
 
-  var html = '<strong>⚠️ Atención — ítems sin disponibilidad</strong><ul style="margin:.5rem 0 0 1rem">';
-  sinDisp.forEach(function(r) {
-    html += '<li><strong>' + r.variedad + '</strong>: no hay lotes que cumplan variedad, fecha y stock.</li>';
-  });
-  sinFecha.forEach(function(r) {
-    html += '<li><strong>' + r.variedad + '</strong>: sin fecha requerida en el RFQ.</li>';
-  });
-  html += '</ul><p style="margin-top:.5rem;font-size:.8rem">Imprimir desactivado hasta resolver.</p>';
+  var html = '';
+
+  if (sinDisp.length || sinFecha.length) {
+    html += '<strong>⚠️ Atención — ítems sin disponibilidad</strong><ul style="margin:.5rem 0 0 1rem">';
+    sinDisp.forEach(function(r) {
+      html += '<li><strong>' + r.variedad + '</strong>: no hay lotes que cumplan variedad, fecha y stock.</li>';
+    });
+    sinFecha.forEach(function(r) {
+      html += '<li><strong>' + r.variedad + '</strong>: sin fecha requerida en el RFQ.</li>';
+    });
+    html += '</ul><p style="margin-top:.5rem;font-size:.8rem">Imprimir desactivado hasta resolver.</p>';
+  }
+
+  if (huerfanos.length) {
+    html += '<p style="margin-top:.6rem"><strong>⚠️ Conversiones faltantes</strong> — las siguientes combinaciones no tienen ruta en <em>conversiones_tipo</em>:</p>';
+    html += '<ul style="margin:.3rem 0 0 1rem;font-size:.85rem">';
+    huerfanos.forEach(function(h) {
+      html += '<li><code>' + h.de + '</code> → <code>' + h.a + '</code></li>';
+    });
+    html += '</ul>';
+  }
+
   banner.innerHTML = html;
   banner.classList.remove('hidden');
 }
