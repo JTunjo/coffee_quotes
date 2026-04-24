@@ -35,6 +35,10 @@ var _TASAS_KEY     = 'cf_tasas_v1';
 var _TASAS_TTL     = 3600000; // 1 hour
 var etiquetasCache = null;
 
+var presentacionesCache = null;
+var _PRES_KEY = 'cf_presentaciones_v1';
+var _PRES_TTL = 86400000; // 24 hours
+
 function _preloadTasas() {
   try {
     var raw = sessionStorage.getItem(_TASAS_KEY);
@@ -49,6 +53,48 @@ function _preloadTasas() {
       try { sessionStorage.setItem(_TASAS_KEY, JSON.stringify({ ts: Date.now(), data: res.tasas })); } catch(e) {}
     }
   }).catch(function() {});
+}
+
+function _preloadPresentaciones() {
+  try {
+    var raw = localStorage.getItem(_PRES_KEY);
+    if (raw) {
+      var parsed = JSON.parse(raw);
+      if (Date.now() - parsed.ts < _PRES_TTL) {
+        presentacionesCache = parsed.data;
+        refreshPresentacionSelects();
+        return;
+      }
+    }
+  } catch(e) {}
+  apiGet({ action: 'getPresentaciones' }).then(function(res) {
+    if (res && res.ok && res.presentaciones && res.presentaciones.length) {
+      presentacionesCache = res.presentaciones;
+      try { localStorage.setItem(_PRES_KEY, JSON.stringify({ ts: Date.now(), data: res.presentaciones })); } catch(e) {}
+      refreshPresentacionSelects();
+    }
+  }).catch(function(e) { console.error('[init] presentaciones:', e); });
+}
+
+function buildPresentacionOptions(selected) {
+  if (!presentacionesCache || !presentacionesCache.length) {
+    return '<option value="250g">250g</option>' +
+           '<option value="500g">500g</option>' +
+           '<option value="1Kg" selected>1 Kg</option>' +
+           '<option value="12Kg">12 Kg</option>' +
+           '<option value="Granel">Granel</option>';
+  }
+  return presentacionesCache.map(function(p) {
+    var sel = (!selected && p.nombre === '1Kg') || (selected && selected === p.nombre) ? ' selected' : '';
+    return '<option value="' + p.nombre + '"' + sel + '>' + p.nombre + '</option>';
+  }).join('');
+}
+
+function refreshPresentacionSelects() {
+  document.querySelectorAll('select[data-field="presentacion"]').forEach(function(sel) {
+    var current = sel.value;
+    sel.innerHTML = buildPresentacionOptions(current);
+  });
 }
 
 function _preloadEtiquetas() {
@@ -348,13 +394,7 @@ function addRfqItem() {
     '<div><label>Cantidad</label>' +
       '<input type="number" min="1" value="100" data-field="cantidad_unidades" /></div>' +
     '<div><label>Presentación</label>' +
-      '<select data-field="presentacion">' +
-        '<option value="250g">250g</option>' +
-        '<option value="500g">500g</option>' +
-        '<option value="1Kg" selected>1 Kg</option>' +
-        '<option value="12Kg">12 Kg</option>' +
-        '<option value="Granel">Granel</option>' +
-      '</select></div>' +
+      '<select data-field="presentacion">' + buildPresentacionOptions() + '</select></div>' +
     '<div><label>Estado proceso</label>' +
       '<select data-field="estado_proceso">' +
         '<option value="Pergamino">Pergamino</option>' +
@@ -983,6 +1023,7 @@ function init() {
   // Pre-warm tasas and etiquetas caches in background
   _preloadTasas();
   _preloadEtiquetas();
+  _preloadPresentaciones();
 }
 
 document.addEventListener('DOMContentLoaded', init);

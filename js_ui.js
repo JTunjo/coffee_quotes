@@ -93,14 +93,21 @@ function formatMon(v, moneda) {
 }
 
 // ── Helpers de cálculo ────────────────────────────────────
-function factorPresentacion(presentacion, cantidad_unidades) {
-  switch ((presentacion || '').trim()) {
-    case '250g':   return 0.25;
-    case '500g':   return 0.5;
-    case '1Kg':    return 1;
-    case '12Kg':   return 12;
-    case 'Granel': return parseFloat(cantidad_unidades || 1);
-    default:       return 1;
+function factorPresentacion(presentacion) {
+  var p = (presentacion || '').trim();
+  if (presentacionesCache) {
+    for (var i = 0; i < presentacionesCache.length; i++) {
+      if (String(presentacionesCache[i].nombre).trim() === p) {
+        return parseFloat(presentacionesCache[i].relacion_kilo || 1);
+      }
+    }
+  }
+  switch (p) {
+    case '250g':  return 0.25;
+    case '500g':  return 0.5;
+    case '1Kg':   return 1;
+    case '12Kg':  return 12;
+    default:      return 1;
   }
 }
 
@@ -118,9 +125,9 @@ var INCOTERMS = [
 
 // Costo total acumulado hasta el nivel de incoterm dado (en COP)
 // El costo base del lote (disponibilidades) siempre se incluye en nivel >= 1
-function calcIncotermTotal(loteCosto, itemCostos, nivel, tUSD, tEUR, factor, cant, presentacion) {
+function calcIncotermTotal(loteCosto, itemCostos, nivel, tUSD, tEUR, factor, cant) {
   if (!nivel) return 0;
-  var cantKg   = presentacion === 'Granel' ? parseFloat(cant) : parseFloat(cant) * factor;
+  var cantKg   = parseFloat(cant) * factor;
   var baseKgCOP = parseFloat(loteCosto || 0); // lote base → EXW
   itemCostos.forEach(function(c) {
     var cNivel = parseFloat(c.incoterm_id || 0);
@@ -204,9 +211,9 @@ function renderCotizacion(data, soloLectura, resultadosDisp) {
   // kg totales de todos los ítems (para prorrateo de costos globales)
   var totalKgTodos = 0;
   items.forEach(function(item) {
-    var f = factorPresentacion(item.presentacion, item.cantidad_unidades);
+    var f = factorPresentacion(item.presentacion);
     var c = parseFloat(item.cantidad_unidades || 0);
-    totalKgTodos += item.presentacion === 'Granel' ? c : c * f;
+    totalKgTodos += c * f;
   });
 
   // Costos globales: los que no tienen cot_item_id
@@ -237,11 +244,11 @@ function renderCotizacion(data, soloLectura, resultadosDisp) {
     }, 0);
 
     var pfKgCOP = parseFloat(item.costo_lote_kg || 0) + sumaCostosKgCOP;
-    var factor  = factorPresentacion(item.presentacion, item.cantidad_unidades);
+    var factor  = factorPresentacion(item.presentacion);
     var cant    = parseFloat(item.cantidad_unidades || 0);
-    var cantKg  = item.presentacion === 'Granel' ? cant : cant * factor;
+    var cantKg  = cant * factor;
     var puCOP   = pfKgCOP * factor;
-    var totalCOP  = item.presentacion === 'Granel' ? puCOP : puCOP * cant;
+    var totalCOP  = puCOP * cant;
     var totalUSD  = tUSD > 0 ? totalCOP / tUSD : 0;
     var totalEUR  = tEUR > 0 ? totalCOP / tEUR : 0;
 
@@ -314,7 +321,7 @@ function renderCotizacion(data, soloLectura, resultadosDisp) {
       var mon  = (c.moneda || 'COP').toUpperCase();
       var vCOP = aCOP(v, mon, tUSD, tEUR);
       var undCOP  = vCOP * factor;
-      var totCOP  = item.presentacion === 'Granel' ? vCOP * factor : vCOP * factor * cant;
+      var totCOP  = vCOP * factor * cant;
       var totMon  = monedaRFQ === 'USD' && tUSD > 0 ? totCOP / tUSD
                   : monedaRFQ === 'EUR' && tEUR > 0 ? totCOP / tEUR : totCOP;
 
@@ -442,7 +449,7 @@ function renderCotizacion(data, soloLectura, resultadosDisp) {
         '<div style="font-size:.8rem;font-weight:700;color:var(--accent2);margin-bottom:.35rem">Sub-totales por Incoterm</div>' +
         '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:.4rem">' +
         INCOTERMS.map(function(inc) {
-          var totInc    = calcIncotermTotal(parseFloat(item.costo_lote_kg || 0), itemCostos, inc.id, tUSD, tEUR, factor, cant, item.presentacion);
+          var totInc    = calcIncotermTotal(parseFloat(item.costo_lote_kg || 0), itemCostos, inc.id, tUSD, tEUR, factor, cant);
           var totIncMon = monedaRFQ === 'USD' && tUSD > 0 ? totInc / tUSD
                         : monedaRFQ === 'EUR' && tEUR > 0 ? totInc / tEUR : totInc;
           return '<div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:.4rem .6rem;text-align:center">' +
@@ -463,7 +470,7 @@ function renderCotizacion(data, soloLectura, resultadosDisp) {
           })[0];
           var tasaValor = override ? parseFloat(override.tasa_valor) : parseFloat(tasa.tasa_valor || 0);
           var nivel     = parseFloat(tasa.incoterm_aplicable || 0);
-          var baseTotal = calcIncotermTotal(parseFloat(item.costo_lote_kg || 0), itemCostos, nivel, tUSD, tEUR, factor, cant, item.presentacion);
+          var baseTotal = calcIncotermTotal(parseFloat(item.costo_lote_kg || 0), itemCostos, nivel, tUSD, tEUR, factor, cant);
           var descuenta = tasa.descuenta === true || String(tasa.descuenta).toUpperCase() === 'TRUE';
           var valor     = baseTotal * (tasaValor / 100) * (descuenta ? -1 : 1);
           var valorUSD  = tUSD > 0 ? valor / tUSD : 0;
@@ -546,9 +553,9 @@ function onCostoChange(input) {
 
   var tUSD   = parseFloat(tasaUSD || 0);
   var tEUR   = parseFloat(tasaEUR || 0);
-  var factor = factorPresentacion(presentacion, cantidad);
+  var factor = factorPresentacion(presentacion);
   var vCOP   = aCOP(newVal, moneda, tUSD, tEUR);
-  var subCOP = presentacion === 'Granel' ? vCOP * factor : vCOP * factor * cantidad;
+  var subCOP = vCOP * factor * cantidad;
 
   var subEl = document.getElementById('sub-' + costoId);
   if (subEl) subEl.textContent = Math.round(subCOP).toLocaleString('es-CO');
@@ -570,10 +577,10 @@ function recalcItemUI(itemId, loteCosto, cantidad, presentacion) {
   });
 
   var pfKgCOP  = loteCosto + sumaCOP;
-  var factor   = factorPresentacion(presentacion, cantidad);
+  var factor   = factorPresentacion(presentacion);
   var cant     = parseFloat(cantidad || 0);
   var puCOP    = pfKgCOP * factor;
-  var totalCOP = presentacion === 'Granel' ? puCOP : puCOP * cant;
+  var totalCOP = puCOP * cant;
   var totalUSD = tUSD > 0 ? totalCOP / tUSD : 0;
   var totalEUR = tEUR > 0 ? totalCOP / tEUR : 0;
 
@@ -626,10 +633,10 @@ function renderSummary(items, costos) {
     }
 
     var pfKgCOP = loteCosto + sumaCOP;
-    var factor  = factorPresentacion(item.presentacion, item.cantidad_unidades);
+    var factor  = factorPresentacion(item.presentacion);
     var cant    = parseFloat(item.cantidad_unidades || 0);
     var puCOP   = pfKgCOP * factor;
-    var totCOP  = item.presentacion === 'Granel' ? puCOP : puCOP * cant;
+    var totCOP  = puCOP * cant;
     var totUSD  = tUSD > 0 ? totCOP / tUSD : 0;
     var totEUR  = tEUR > 0 ? totCOP / tEUR : 0;
 
@@ -658,7 +665,7 @@ function renderSummary(items, costos) {
   if (tasas.length > 0) {
     items.forEach(function(item) {
       var itemCostos = costos.filter(function(c) { return c.cot_item_id === item.cot_item_id; });
-      var factor     = factorPresentacion(item.presentacion, item.cantidad_unidades);
+      var factor     = factorPresentacion(item.presentacion);
       var cant       = parseFloat(item.cantidad_unidades || 0);
       var loteCosto  = parseFloat(item.costo_lote_kg || 0);
 
@@ -669,7 +676,7 @@ function renderSummary(items, costos) {
         })[0];
         var tasaValor = override ? parseFloat(override.tasa_valor) : parseFloat(tasa.tasa_valor || 0);
         var nivel     = parseFloat(tasa.incoterm_aplicable || 0);
-        var baseTotal = calcIncotermTotal(loteCosto, itemCostos, nivel, tUSD, tEUR, factor, cant, item.presentacion);
+        var baseTotal = calcIncotermTotal(loteCosto, itemCostos, nivel, tUSD, tEUR, factor, cant);
         var descuenta = tasa.descuenta === true || String(tasa.descuenta).toUpperCase() === 'TRUE';
         var valor     = baseTotal * (tasaValor / 100) * (descuenta ? -1 : 1);
         var valorUSD  = tUSD > 0 ? valor / tUSD : 0;

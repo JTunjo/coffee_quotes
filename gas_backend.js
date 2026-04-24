@@ -21,6 +21,7 @@ var SHEETS = {
   COTIZACION_TASAS:            'Cotizacion_tasas',
   LISTAS:                      'Listas',
   ETIQUETAS:                   'Etiquetas',
+  FACTOR_PRESENTACION:         'factor_presentacion',
 };
 
 // ── Helpers generales ─────────────────────────────────────
@@ -236,15 +237,23 @@ function aCOP(valor, moneda, tasa_usd, tasa_eur) {
   return valor;
 }
 
-// ── Factor de presentación ────────────────────────────────
+// ── Presentaciones ────────────────────────────────────────
 
-function factorPresentacion(presentacion, cantidad_kg) {
-  var p = (presentacion || '').trim();
-  if (p === '250g')   return 0.25;
-  if (p === '500g')   return 0.5;
-  if (p === '1Kg')    return 1;
-  if (p === '12Kg')   return 12;
-  if (p === 'Granel') return parseFloat(cantidad_kg || 1);
+function getPresentaciones() {
+  var cache  = CacheService.getScriptCache();
+  var cached = cache.get('presentaciones');
+  if (cached) return JSON.parse(cached);
+  var data = sheetToObjects(SHEETS.FACTOR_PRESENTACION);
+  cache.put('presentaciones', JSON.stringify(data), 21600);
+  return data;
+}
+
+function factorPresentacion(presentacion) {
+  var p    = (presentacion || '').trim();
+  var data = getPresentaciones();
+  for (var i = 0; i < data.length; i++) {
+    if (String(data[i].nombre).trim() === p) return parseFloat(data[i].relacion_kilo || 1);
+  }
   return 1;
 }
 
@@ -282,6 +291,7 @@ function doGet(e) {
       else if (action === 'listRFQs')                result = listRFQs();
       else if (action === 'verificarDisponibilidad') result = verificarDisponibilidad(p.cotizacionId);
       else if (action === 'getTasas')                result = getTasas();
+      else if (action === 'getPresentaciones')       result = { ok: true, presentaciones: getPresentaciones() };
       else result = { ok: false, error: 'Accion desconocida: ' + action };
     }
 
@@ -526,8 +536,8 @@ function verificarDisponibilidad(cotizacionId) {
       continue;
     }
 
-    var factor       = factorPresentacion(item.presentacion, cantidadUnid);
-    var cantidadKg   = item.presentacion === 'Granel' ? cantidadUnid : cantidadUnid * factor;
+    var factor       = factorPresentacion(item.presentacion);
+    var cantidadKg   = cantidadUnid * factor;
     var variedadItem = (item.variedad || '').toLowerCase();
     var lotesCandidatos = filterArr(disponibles, function(d) {
       if ((d.variedad || '').toLowerCase() !== variedadItem) return false;
@@ -1216,9 +1226,9 @@ function recalcularTotales(cotizacion_id) {
 
     var precio_final_kg = parseFloat(item.costo_lote_kg || 0) + sumaCostosKgCOP;
     var cantidad        = parseFloat(item.cantidad_unidades || 0);
-    var factor          = factorPresentacion(item.presentacion, item.cantidad_unidades);
+    var factor          = factorPresentacion(item.presentacion);
     var precio_unitario = precio_final_kg * factor;
-    var total_cop       = item.presentacion === 'Granel' ? precio_unitario : precio_unitario * cantidad;
+    var total_cop       = precio_unitario * cantidad;
 
     itemUpdatesMap[item.cot_item_id] = {
       precio_final_kg: precio_final_kg,
