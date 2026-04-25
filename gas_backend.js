@@ -461,7 +461,7 @@ function _recalcularCostosEstandar(cotizacionId) {
 
   // Remove all existing non-manual costs for this cotizacion
   deleteRows(SHEETS.COTIZACION_COSTOS, function(r) {
-    return r.cotizacion_id === cotizacionId && (r.tipo || '') !== 'manual';
+    return r.cotizacion_id === cotizacionId && (r.tipo || '') === 'estandar';
   });
 
   // Re-add standard costs based on etiquetas matching (deduplicated per item)
