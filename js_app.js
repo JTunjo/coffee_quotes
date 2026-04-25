@@ -1024,14 +1024,6 @@ function init() {
   _preloadTasas();
   _preloadEtiquetas();
   _preloadPresentaciones();
-
-  // DEBUG — remover después de verificar
-  apiGet({ action: 'getConversiones' }).then(function(res) {
-    console.log('[DEBUG] conversiones_tipo raw:', JSON.stringify(res.conversiones, null, 2));
-    if (res.conversiones && res.conversiones.length) {
-      console.log('[DEBUG] keys de primera fila:', Object.keys(res.conversiones[0]));
-    }
-  }).catch(function(e) { console.error('[DEBUG] getConversiones error:', e); });
 }
 
 document.addEventListener('DOMContentLoaded', init);
