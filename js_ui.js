@@ -64,7 +64,12 @@ function renderDisponibilidadBanner(resultados, conversionesFaltantes) {
   if (sinDisp.length || sinFecha.length) {
     html += '<strong>⚠️ Atención — ítems sin disponibilidad</strong><ul style="margin:.5rem 0 0 1rem">';
     sinDisp.forEach(function(r) {
-      html += '<li><strong>' + r.variedad + '</strong>: no hay lotes que cumplan variedad, fecha y stock.</li>';
+      var d = r.diagnostico || {};
+      var detalle = d.razon === 'sin_lotes_en_rango'   ? 'no hay lotes con esa variedad en las fechas requeridas.'
+                  : d.razon === 'sin_conversion'        ? 'lotes encontrados pero sin conversión configurada (ver tabla abajo).'
+                  : d.razon === 'stock_insuficiente'    ? 'stock insuficiente — requiere ' + d.requerido_kg + ' Kg, disponible: ' + d.disponible_kg + ' Kg.'
+                  :                                      'no hay lotes que cumplan variedad, fecha y stock.';
+      html += '<li><strong>' + r.variedad + '</strong>: ' + detalle + '</li>';
     });
     sinFecha.forEach(function(r) {
       html += '<li><strong>' + r.variedad + '</strong>: sin fecha requerida en el RFQ.</li>';

@@ -293,6 +293,7 @@ function doGet(e) {
       else if (action === 'verificarDisponibilidad') result = verificarDisponibilidad(p.cotizacionId);
       else if (action === 'getTasas')                result = getTasas();
       else if (action === 'getPresentaciones')       result = { ok: true, presentaciones: getPresentaciones() };
+      else if (action === 'getConversiones')         result = { ok: true, conversiones: getConversiones() };
       else result = { ok: false, error: 'Accion desconocida: ' + action };
     }
 
@@ -509,13 +510,18 @@ function getConversiones() {
 function _buildConvGraph(conversiones) {
   var graph = {};
   for (var i = 0; i < conversiones.length; i++) {
-    var c  = conversiones[i];
-    var de = String(c.de || '').trim().toLowerCase();
-    var a  = String(c.a  || '').trim().toLowerCase();
-    var m  = parseFloat(c.merma || 0);
-    if (m > 1) m = m / 100; // normaliza si viene como 40 en vez de 0.40
-    if (!graph[de]) graph[de] = {};
-    graph[de][a] = 1 - m; // yield
+    var c = conversiones[i];
+    var deVal = '', aVal = '', mVal = 0;
+    for (var k in c) {
+      var kl = k.toLowerCase();
+      if      (kl === 'de')    deVal = String(c[k] || '').trim().toLowerCase();
+      else if (kl === 'a')     aVal  = String(c[k] || '').trim().toLowerCase();
+      else if (kl === 'merma') mVal  = parseFloat(c[k] || 0);
+    }
+    if (!deVal || !aVal) continue;
+    if (mVal > 1) mVal = mVal / 100;
+    if (!graph[deVal]) graph[deVal] = {};
+    graph[deVal][aVal] = 1 - mVal;
   }
   return graph;
 }
@@ -598,6 +604,7 @@ function verificarDisponibilidad(cotizacionId) {
     var estadoProceso = (item.estado_proceso || '').toLowerCase();
 
     var lotesCandidatos = [];
+    var diagEnRango = 0, diagSinConv = 0, diagSinStock = 0, diagReqKg = 0, diagDispKg = 0;
     for (var li = 0; li < disponibles.length; li++) {
       var d = disponibles[li];
       if ((d.variedad || '').toLowerCase() !== variedadItem) continue;
@@ -609,16 +616,21 @@ function verificarDisponibilidad(cotizacionId) {
       if (isNaN(dDesde.getTime()) || isNaN(dHasta.getTime())) continue;
       if (!(fechaReq >= dDesde && fechaReq <= dHasta)) continue;
 
+      diagEnRango++;
       var dispTipo   = (d.presentacion || '').toLowerCase();
       var convFactor = _computeConvFactor(dispTipo, estadoProceso, convGraph, convMemo);
       if (convFactor === null || convFactor <= 0) {
+        diagSinConv++;
         var hKey = dispTipo + '→' + estadoProceso;
         if (!convHuerfanos[hKey]) convHuerfanos[hKey] = { de: dispTipo, a: estadoProceso };
         continue;
       }
 
-      var requiredKg = cantidadKg / convFactor;
-      if (parseFloat(d.kilos_disponibles || 0) < requiredKg) continue;
+      var requiredKg  = cantidadKg / convFactor;
+      var disponibleKg = parseFloat(d.kilos_disponibles || 0);
+      diagReqKg = Math.ceil(requiredKg);
+      if (disponibleKg > diagDispKg) diagDispKg = disponibleKg;
+      if (disponibleKg < requiredKg) { diagSinStock++; continue; }
 
       lotesCandidatos.push({
         lote:          d,
@@ -630,8 +642,13 @@ function verificarDisponibilidad(cotizacionId) {
 
     if (lotesCandidatos.length === 0) {
       _actualizarEstadoItem(item.cot_item_id, '', 0, 0, 'sin_disponibilidad');
+      var razon = diagEnRango === 0    ? 'sin_lotes_en_rango'
+                : diagSinConv > 0     ? 'sin_conversion'
+                : diagSinStock > 0    ? 'stock_insuficiente'
+                :                      'desconocido';
       resultados.push({ cot_item_id: item.cot_item_id, variedad: item.variedad,
-                        estado: 'sin_disponibilidad', lotes: [] });
+                        estado: 'sin_disponibilidad', lotes: [],
+                        diagnostico: { razon: razon, requerido_kg: diagReqKg, disponible_kg: diagDispKg } });
       hayIncompletos = true;
     } else {
       lotesCandidatos.sort(function(a, b) { return a.costoEfectivo - b.costoEfectivo; });
