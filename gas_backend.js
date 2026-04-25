@@ -503,12 +503,7 @@ function _recalcularCostosEstandar(cotizacionId) {
 // ── Conversiones de tipo de café ──────────────────────────
 
 function getConversiones() {
-  var cache  = CacheService.getScriptCache();
-  var cached = cache.get('conversiones_tipo');
-  if (cached) return JSON.parse(cached);
-  var data = sheetToObjects(SHEETS.CONVERSIONES_TIPO);
-  cache.put('conversiones_tipo', JSON.stringify(data), 21600);
-  return data;
+  return sheetToObjects(SHEETS.CONVERSIONES_TIPO);
 }
 
 function _buildConvGraph(conversiones) {
