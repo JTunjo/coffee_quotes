@@ -634,7 +634,7 @@ function verificarDisponibilidad(cotizacionId) {
     }
 
     if (lotesCandidatos.length === 0) {
-      _actualizarEstadoItem(item.cot_item_id, '', 0, 'sin_disponibilidad');
+      _actualizarEstadoItem(item.cot_item_id, '', 0, 0, 'sin_disponibilidad');
       resultados.push({ cot_item_id: item.cot_item_id, variedad: item.variedad,
                         estado: 'sin_disponibilidad', lotes: [] });
       hayIncompletos = true;
@@ -644,7 +644,8 @@ function verificarDisponibilidad(cotizacionId) {
       var loteOptimo     = mejor.lote;
       var costo_lote_cop = mejor.costoEfectivo;
 
-      _actualizarEstadoItem(item.cot_item_id, loteOptimo.lote_id, costo_lote_cop, 'completo');
+      _actualizarEstadoItem(item.cot_item_id, loteOptimo.lote_id, costo_lote_cop,
+                            parseFloat(loteOptimo.costo_cop_kg || 0), 'completo');
 
       var lotesInfo = mapArr(lotesCandidatos, function(m) {
         var l = m.lote;
@@ -709,9 +710,10 @@ function asignarLote(body) {
   var convFactor    = _computeConvFactor(dispTipo, estadoProceso, _buildConvGraph(getConversiones()), {});
   if (!convFactor || convFactor <= 0) convFactor = 1;
 
-  var costo_lote_cop = parseFloat(lote.costo_cop_kg || 0) / convFactor;
+  var costo_raw_cop  = parseFloat(lote.costo_cop_kg || 0);
+  var costo_lote_cop = costo_raw_cop / convFactor;
 
-  _actualizarEstadoItem(cot_item_id, lote_id, costo_lote_cop, 'completo');
+  _actualizarEstadoItem(cot_item_id, lote_id, costo_lote_cop, costo_raw_cop, 'completo');
   recalcularTotales(cotizacion_id);
 
   var items          = filterArr(sheetToObjects(SHEETS.COTIZACION_ITEMS),
@@ -738,13 +740,14 @@ function _guardarPerfil(cot_item_id, perfil_sensorial) {
   );
 }
 
-function _actualizarEstadoItem(cot_item_id, lote_id, costo_lote_kg, estado) {
+function _actualizarEstadoItem(cot_item_id, lote_id, costo_lote_kg, costo_disponibilidad_kg, estado) {
   updateRows(SHEETS.COTIZACION_ITEMS,
     function(r) { return r.cot_item_id === cot_item_id; },
     function(r) { return mergeObj(r, {
-      lote_id:               lote_id,
-      costo_lote_kg:         costo_lote_kg,
-      estado_disponibilidad: estado,
+      lote_id:                  lote_id,
+      costo_lote_kg:            costo_lote_kg,
+      costo_disponibilidad_kg:  costo_disponibilidad_kg,
+      estado_disponibilidad:    estado,
     }); }
   );
 }

@@ -272,10 +272,12 @@ function renderCotizacion(data, soloLectura, resultadosDisp) {
     var puMon   = monedaRFQ === 'USD' && tUSD > 0 ? puCOP / tUSD
                 : monedaRFQ === 'EUR' && tEUR > 0 ? puCOP / tEUR : puCOP;
 
-    var costoCompraCOP = parseFloat(item.costo_lote_kg || 0) * cantKg;
-    var coteLoteCOP    = totalCOP;
-    var coteLoteUSD    = totalUSD;
-    var coteLoteEUR    = totalEUR;
+    var costoDispKg  = parseFloat(item.costo_disponibilidad_kg || 0);
+    var costoTargetKg = parseFloat(item.costo_lote_kg || 0);
+    var coteLoteCOP   = totalCOP;
+    var coteLoteMon   = monedaRFQ === 'USD' && tUSD > 0 ? totalCOP / tUSD
+                      : monedaRFQ === 'EUR' && tEUR > 0 ? totalCOP / tEUR
+                      : totalCOP;
 
     var rfqItem  = rfqItems.find(function(r) { return r.rfq_item_id === item.rfq_item_id; }) || {};
     var fechaRaw = rfqItem.fecha_requerida;
@@ -435,14 +437,14 @@ function renderCotizacion(data, soloLectura, resultadosDisp) {
       '</div>' +
       // ── Línea 3: totales del lote ────────────────────────
       '<div class="form-grid" style="margin-bottom:.75rem">' +
-        '<div><label>Costo Compra COP (Disp.)</label>' +
-          '<strong>' + formatCOP(costoCompraCOP) + '</strong></div>' +
+        '<div><label>Costo Compra / Kg (Disponible)</label>' +
+          '<strong>' + formatCOP(costoDispKg) + '</strong></div>' +
+        '<div><label>Costo Compra / Kg (Target)</label>' +
+          '<strong>' + formatCOP(costoTargetKg) + '</strong></div>' +
         '<div><label>Costo Total Lote (COP)</label>' +
           '<strong id="tot-cop-' + item.cot_item_id + '">' + formatCOP(coteLoteCOP) + '</strong></div>' +
-        '<div><label>Costo Total Lote (USD)</label>' +
-          '<strong id="tot-usd-' + item.cot_item_id + '">' + formatUSD(coteLoteUSD) + '</strong></div>' +
-        '<div><label>Costo Total Lote (EUR)</label>' +
-          '<strong id="tot-eur-' + item.cot_item_id + '">' + formatEUR(coteLoteEUR) + '</strong></div>' +
+        '<div><label>Costo Total Lote (' + monedaRFQ + ')</label>' +
+          '<strong id="tot-mon-' + item.cot_item_id + '">' + formatMon(coteLoteMon, monedaRFQ) + '</strong></div>' +
       '</div>' +
       selectorLote +
       // ── Detalle Costos ───────────────────────────────────
@@ -609,9 +611,11 @@ function recalcItemUI(itemId, loteCosto, cantidad, presentacion) {
   el = document.getElementById('pu-mon-'  + itemId); if (el) el.textContent = formatMon(puMon, monRFQ);
   el = document.getElementById('pkg-cop-' + itemId); if (el) el.textContent = formatCOP(pfKgCOP);
   el = document.getElementById('pkg-mon-' + itemId); if (el) el.textContent = formatMon(pfKgMon, monRFQ);
+  var totalMon = monRFQ === 'USD' && tUSD > 0 ? totalCOP / tUSD
+               : monRFQ === 'EUR' && tEUR > 0 ? totalCOP / tEUR
+               : totalCOP;
   el = document.getElementById('tot-cop-' + itemId); if (el) el.textContent = formatCOP(totalCOP);
-  el = document.getElementById('tot-usd-' + itemId); if (el) el.textContent = formatUSD(totalUSD);
-  el = document.getElementById('tot-eur-' + itemId); if (el) el.textContent = formatEUR(totalEUR);
+  el = document.getElementById('tot-mon-' + itemId); if (el) el.textContent = formatMon(totalMon, monRFQ);
 }
 
 // ── Resumen multicurrency ─────────────────────────────────
