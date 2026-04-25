@@ -600,14 +600,14 @@ function verificarDisponibilidad(cotizacionId) {
 
     var factor        = factorPresentacion(item.presentacion);
     var cantidadKg    = cantidadUnid * factor;
-    var variedadItem  = (item.variedad      || '').toLowerCase();
-    var estadoProceso = (item.estado_proceso || '').toLowerCase();
+    var variedadItem  = (item.variedad      || '').trim().toLowerCase();
+    var estadoProceso = (item.estado_proceso || '').trim().toLowerCase();
 
     var lotesCandidatos = [];
     var diagEnRango = 0, diagSinConv = 0, diagSinStock = 0, diagReqKg = 0, diagDispKg = 0;
     for (var li = 0; li < disponibles.length; li++) {
       var d = disponibles[li];
-      if ((d.variedad || '').toLowerCase() !== variedadItem) continue;
+      if ((d.variedad || '').trim().toLowerCase() !== variedadItem) continue;
 
       var dDesde = d.fecha_disponible_desde instanceof Date
         ? d.fecha_disponible_desde : new Date(d.fecha_disponible_desde);
@@ -617,7 +617,7 @@ function verificarDisponibilidad(cotizacionId) {
       if (!(fechaReq >= dDesde && fechaReq <= dHasta)) continue;
 
       diagEnRango++;
-      var dispTipo   = (d.presentacion || '').toLowerCase();
+      var dispTipo   = (d.presentacion || '').trim().toLowerCase();
       var convFactor = _computeConvFactor(dispTipo, estadoProceso, convGraph, convMemo);
       if (convFactor === null || convFactor <= 0) {
         diagSinConv++;
@@ -717,8 +717,8 @@ function asignarLote(body) {
   var cotItem  = findOne(cotItems, function(i) { return i.cot_item_id === cot_item_id; });
   if (!cotItem) return { ok: false, error: 'Item de cotización no encontrado' };
 
-  var dispTipo      = (lote.presentacion      || '').toLowerCase();
-  var estadoProceso = (cotItem.estado_proceso  || '').toLowerCase();
+  var dispTipo      = (lote.presentacion      || '').trim().toLowerCase();
+  var estadoProceso = (cotItem.estado_proceso  || '').trim().toLowerCase();
   var convFactor    = _computeConvFactor(dispTipo, estadoProceso, _buildConvGraph(getConversiones()), {});
   if (!convFactor || convFactor <= 0) convFactor = 1;
 
