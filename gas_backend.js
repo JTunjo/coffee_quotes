@@ -23,6 +23,7 @@ var SHEETS = {
   ETIQUETAS:                   'Etiquetas',
   FACTOR_PRESENTACION:         'factor_presentacion',
   CONVERSIONES_TIPO:           'conversiones_tipo',
+  MERMAS:                      'Mermas',
 };
 
 // ── Helpers generales ─────────────────────────────────────
@@ -501,10 +502,103 @@ function _recalcularCostosEstandar(cotizacionId) {
   if (nuevaFilas.length) batchAppendRows(SHEETS.COTIZACION_COSTOS, nuevaFilas);
 }
 
+// ── Mermas por selección ──────────────────────────────────
+
+function _recalcularMermas(cotizacionId) {
+  var mermasRows = getMermas();
+  if (!mermasRows.length) return;
+
+  var cot = filterArr(sheetToObjects(SHEETS.COTIZACIONES),
+    function(r) { return r.cotizacion_id === cotizacionId; })[0];
+  if (!cot) return;
+  var tasaUSD = parseFloat(cot.tasa_usd || 0);
+  var tasaEUR = parseFloat(cot.tasa_eur || 0);
+
+  var cotItems = filterArr(sheetToObjects(SHEETS.COTIZACION_ITEMS),
+    function(i) { return i.cotizacion_id === cotizacionId; });
+
+  // Read costos excluding merma (to avoid circularity in EXW base)
+  var baseCostos = filterArr(sheetToObjects(SHEETS.COTIZACION_COSTOS),
+    function(c) { return c.cotizacion_id === cotizacionId && c.tipo !== 'merma'; });
+
+  // Replace all existing merma costs for this cotización
+  deleteRows(SHEETS.COTIZACION_COSTOS, function(r) {
+    return r.cotizacion_id === cotizacionId && r.tipo === 'merma';
+  });
+
+  var timestamp  = now();
+  var nuevasFilas = [];
+
+  for (var i = 0; i < cotItems.length; i++) {
+    var item     = cotItems[i];
+    var ignorado = item.ignorado === true || String(item.ignorado).toUpperCase() === 'TRUE';
+    if (ignorado) continue;
+
+    var itemTags = _parseEtiquetas(item.etiquetas);
+    var mermaTotal = 0;
+    for (var m = 0; m < mermasRows.length; m++) {
+      var mr       = mermasRows[m];
+      var etiqueta = String(mr.etiqueta || '').trim().toLowerCase();
+      var coincide = false;
+      for (var e = 0; e < itemTags.length; e++) {
+        if (itemTags[e] === etiqueta) { coincide = true; break; }
+      }
+      if (!coincide) continue;
+      var total = _parsePct(mr.pct_merma_defectos) + _parsePct(mr.pct_merma_mallas);
+      if (total > mermaTotal) mermaTotal = total;
+    }
+
+    if (mermaTotal <= 0) continue;
+
+    // EXW base per kg: lote cost + EXW-level costs (incoterm_id = 1), excl. merma
+    var costoEXWkg = parseFloat(item.costo_lote_kg || 0);
+    var itemCostos = filterArr(baseCostos, function(c) { return c.cot_item_id === item.cot_item_id; });
+    for (var k = 0; k < itemCostos.length; k++) {
+      var c = itemCostos[k];
+      if (parseFloat(c.incoterm_id || 0) === 1) {
+        costoEXWkg += aCOP(parseFloat(c.valor_kg || 0), c.moneda, tasaUSD, tasaEUR);
+      }
+    }
+
+    var costoMermaKg = costoEXWkg * mermaTotal / (1 - mermaTotal);
+    if (costoMermaKg <= 0) continue;
+
+    nuevasFilas.push({
+      costo_id:      uid(),
+      cotizacion_id: cotizacionId,
+      cot_item_id:   item.cot_item_id,
+      nombre:        'Merma por selección',
+      tipo:          'merma',
+      moneda:        'COP',
+      valor_kg:      Math.round(costoMermaKg),
+      incoterm_id:   1,
+      editable:      true,
+      created_at:    timestamp,
+      updated_at:    timestamp,
+    });
+  }
+
+  if (nuevasFilas.length) batchAppendRows(SHEETS.COTIZACION_COSTOS, nuevasFilas);
+}
+
 // ── Conversiones de tipo de café ──────────────────────────
 
 function getConversiones() {
   return sheetToObjects(SHEETS.CONVERSIONES_TIPO);
+}
+
+function getMermas() {
+  return sheetToObjects(SHEETS.MERMAS);
+}
+
+// Parses "1.5%", 1.5, or 0.015 → decimal fraction
+function _parsePct(val) {
+  var s = String(val || '').trim();
+  if (!s) return 0;
+  if (s.indexOf('%') !== -1) return parseFloat(s) / 100;
+  var n = parseFloat(s);
+  if (isNaN(n)) return 0;
+  return n > 1 ? n / 100 : n;
 }
 
 function _buildConvGraph(conversiones) {
@@ -563,6 +657,7 @@ function verificarDisponibilidad(cotizacionId) {
   if (!cotizacionId) return { ok: false, error: 'cotizacionId requerido' };
 
   _recalcularCostosEstandar(cotizacionId);
+  _recalcularMermas(cotizacionId);
 
   var cotItems    = filterArr(sheetToObjects(SHEETS.COTIZACION_ITEMS),
     function(i) { return i.cotizacion_id === cotizacionId; });
