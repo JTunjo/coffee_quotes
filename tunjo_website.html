@@ -1,0 +1,1154 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tunjo Smart Solutions — Tecnología que transforma el agro</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Sans:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary-dark: #236F96;
+            --primary-mid: #208FB2;
+            --accent-orange: #CE5119;
+            --light-teal: #4DB8D4;
+            --bg-darkest: #050E14;
+            --bg-dark: #0A1A24;
+            --bg-mid: #0F2535;
+            --bg-light: #163040;
+            --muted-text: #7AABB8;
+            --white: #FFFFFF;
+            --grid-color: rgba(32, 143, 178, 0.06);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'DM Sans', sans-serif;
+            background-color: var(--bg-darkest);
+            color: var(--white);
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        /* Grid overlay background */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                linear-gradient(var(--grid-color) 1px, transparent 1px),
+                linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
+            background-size: 60px 60px;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* Typography */
+        h1, h2, h3, h4 {
+            font-family: 'Syne', sans-serif;
+            font-weight: 800;
+            line-height: 1.1;
+        }
+
+        /* Navigation */
+        nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            padding: 1.2rem 5%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(5, 14, 20, 0.7);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-bottom: 1px solid rgba(32, 143, 178, 0.1);
+        }
+
+        .nav-logo {
+            display: flex;
+            align-items: center;
+            gap: 0.8rem;
+            text-decoration: none;
+        }
+
+        .logo-mark {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, var(--primary-mid), var(--primary-dark));
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Syne', sans-serif;
+            font-weight: 800;
+            color: white;
+            font-size: 1.2rem;
+        }
+
+        .logo-text {
+            font-family: 'Syne', sans-serif;
+            font-weight: 800;
+            font-size: 1.3rem;
+            color: var(--white);
+            letter-spacing: 1px;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 2.5rem;
+            align-items: center;
+        }
+
+        .nav-links a {
+            color: var(--muted-text);
+            text-decoration: none;
+            font-size: 0.85rem;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            transition: color 0.3s ease;
+        }
+
+        .nav-links a:hover {
+            color: var(--light-teal);
+        }
+
+        .nav-cta {
+            background: var(--accent-orange);
+            color: var(--white) !important;
+            padding: 0.7rem 1.8rem;
+            border-radius: 4px;
+            font-weight: 600 !important;
+            transition: all 0.3s ease;
+        }
+
+        .nav-cta:hover {
+            background: #e05a1f;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(206, 81, 25, 0.3);
+        }
+
+        /* Mobile menu */
+        .menu-toggle {
+            display: none;
+            flex-direction: column;
+            gap: 5px;
+            cursor: pointer;
+            z-index: 1001;
+        }
+
+        .menu-toggle span {
+            width: 25px;
+            height: 2px;
+            background: var(--white);
+            transition: all 0.3s ease;
+        }
+
+        /* Section tag */
+        .section-tag {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            color: var(--primary-mid);
+            font-size: 0.85rem;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .section-tag::before {
+            content: '';
+            width: 40px;
+            height: 2px;
+            background: var(--primary-mid);
+        }
+
+        /* Hero Section */
+        .hero {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            padding: 8rem 5% 4rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero-content {
+            max-width: 700px;
+            position: relative;
+            z-index: 2;
+        }
+
+        .hero h1 {
+            font-size: clamp(2.5rem, 5vw, 4.5rem);
+            margin-bottom: 1.5rem;
+            background: linear-gradient(135deg, var(--white) 0%, var(--light-teal) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .hero p {
+            font-size: 1.25rem;
+            color: var(--muted-text);
+            margin-bottom: 2.5rem;
+            max-width: 550px;
+            font-weight: 300;
+        }
+
+        .hero-cta-group {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .btn-primary {
+            background: var(--accent-orange);
+            color: var(--white);
+            padding: 1rem 2.5rem;
+            border-radius: 4px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+            display: inline-block;
+            border: none;
+            cursor: pointer;
+        }
+
+        .btn-primary:hover {
+            background: #e05a1f;
+            transform: translateY(-3px);
+            box-shadow: 0 12px 35px rgba(206, 81, 25, 0.35);
+        }
+
+        .btn-secondary {
+            background: transparent;
+            color: var(--white);
+            padding: 1rem 2.5rem;
+            border-radius: 4px;
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+            display: inline-block;
+            border: 1px solid rgba(32, 143, 178, 0.4);
+        }
+
+        .btn-secondary:hover {
+            border-color: var(--primary-mid);
+            background: rgba(32, 143, 178, 0.1);
+        }
+
+        /* Hero stats */
+        .hero-stats {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 2rem;
+            margin-top: 4rem;
+            padding-top: 3rem;
+            border-top: 1px solid rgba(32, 143, 178, 0.15);
+        }
+
+        .stat-item {
+            text-align: left;
+        }
+
+        .stat-number {
+            font-family: 'Syne', sans-serif;
+            font-size: 2.2rem;
+            font-weight: 800;
+            color: var(--light-teal);
+            display: block;
+            margin-bottom: 0.3rem;
+        }
+
+        .stat-label {
+            font-size: 0.85rem;
+            color: var(--muted-text);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        /* Hero decorative elements */
+        .hero-decoration {
+            position: absolute;
+            right: -5%;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 500px;
+            height: 500px;
+            opacity: 0.04;
+            z-index: 1;
+        }
+
+        .hero-decoration svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Services Section */
+        .services {
+            padding: 6rem 5%;
+            background: var(--bg-dark);
+            position: relative;
+        }
+
+        .services-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1.5rem;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .service-card {
+            background: var(--bg-mid);
+            border: 1px solid rgba(32, 143, 178, 0.1);
+            border-radius: 8px;
+            padding: 3rem 2.5rem;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.4s ease;
+            cursor: default;
+        }
+
+        .service-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background: var(--primary-mid);
+            transition: width 0.4s ease;
+        }
+
+        .service-card:hover::before {
+            width: 100%;
+        }
+
+        .service-card:hover {
+            border-color: rgba(32, 143, 178, 0.3);
+            transform: translateY(-5px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .service-number {
+            position: absolute;
+            top: 1.5rem;
+            right: 2rem;
+            font-family: 'Syne', sans-serif;
+            font-size: 4rem;
+            font-weight: 800;
+            color: rgba(32, 143, 178, 0.08);
+            line-height: 1;
+        }
+
+        .service-icon {
+            width: 50px;
+            height: 50px;
+            background: rgba(32, 143, 178, 0.1);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 1.5rem;
+            font-size: 1.5rem;
+        }
+
+        .service-card h3 {
+            font-size: 1.4rem;
+            margin-bottom: 1rem;
+            color: var(--white);
+        }
+
+        .service-card p {
+            color: var(--muted-text);
+            font-size: 0.95rem;
+            line-height: 1.7;
+        }
+
+        /* About Section */
+        .about {
+            padding: 6rem 5%;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .about-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 4rem;
+            align-items: center;
+        }
+
+        .about-text h2 {
+            font-size: clamp(2rem, 4vw, 3rem);
+            margin-bottom: 1.5rem;
+            color: var(--white);
+        }
+
+        .about-text p {
+            color: var(--muted-text);
+            margin-bottom: 1.5rem;
+            font-size: 1.05rem;
+            line-height: 1.8;
+        }
+
+        .about-highlight {
+            color: var(--light-teal);
+            font-weight: 500;
+        }
+
+        .about-visual {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .logo-display {
+            width: 350px;
+            height: 350px;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Corner brackets */
+        .corner-bracket {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            border-color: var(--primary-dark);
+            border-style: solid;
+        }
+
+        .corner-bracket.tl {
+            top: 0;
+            left: 0;
+            border-width: 3px 0 0 3px;
+        }
+
+        .corner-bracket.tr {
+            top: 0;
+            right: 0;
+            border-width: 3px 3px 0 0;
+        }
+
+        .corner-bracket.bl {
+            bottom: 0;
+            left: 0;
+            border-width: 0 0 3px 3px;
+        }
+
+        .corner-bracket.br {
+            bottom: 0;
+            right: 0;
+            border-width: 0 3px 3px 0;
+        }
+
+        .corner-dot {
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            background: var(--primary-dark);
+            border-radius: 50%;
+        }
+
+        .corner-dot.tl { top: -4px; left: -4px; }
+        .corner-dot.tr { top: -4px; right: -4px; }
+        .corner-dot.bl { bottom: -4px; left: -4px; }
+        .corner-dot.br { bottom: -4px; right: -4px; }
+
+        .logo-placeholder {
+            width: 200px;
+            height: 200px;
+            background: linear-gradient(135deg, rgba(32, 143, 178, 0.2), rgba(35, 111, 150, 0.1));
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid rgba(32, 143, 178, 0.2);
+        }
+
+        .logo-placeholder span {
+            font-family: 'Syne', sans-serif;
+            font-size: 4rem;
+            font-weight: 800;
+            color: var(--primary-mid);
+        }
+
+        /* Case Studies Section */
+        .case-studies {
+            padding: 6rem 5%;
+            background: var(--bg-dark);
+        }
+
+        .case-studies-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: 1fr 1fr;
+            gap: 1.5rem;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .case-card {
+            background: var(--bg-mid);
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid rgba(32, 143, 178, 0.1);
+            transition: all 0.4s ease;
+        }
+
+        .case-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+            border-color: rgba(32, 143, 178, 0.3);
+        }
+
+        .case-card.featured {
+            grid-row: span 2;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .case-image {
+            height: 200px;
+            background: linear-gradient(135deg, var(--bg-light), var(--bg-mid));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .case-card.featured .case-image {
+            flex: 1;
+            min-height: 300px;
+        }
+
+        .case-image::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 50%;
+            background: linear-gradient(to top, var(--bg-mid), transparent);
+        }
+
+        .case-image-icon {
+            font-size: 3rem;
+            z-index: 1;
+            opacity: 0.5;
+        }
+
+        .case-content {
+            padding: 2rem;
+        }
+
+        .case-tag {
+            display: inline-block;
+            padding: 0.3rem 0.8rem;
+            background: rgba(32, 143, 178, 0.15);
+            color: var(--light-teal);
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            border-radius: 4px;
+            margin-bottom: 1rem;
+        }
+
+        .case-card.featured .case-tag {
+            background: rgba(206, 81, 25, 0.15);
+            color: var(--accent-orange);
+        }
+
+        .case-content h3 {
+            font-size: 1.3rem;
+            margin-bottom: 0.8rem;
+            color: var(--white);
+        }
+
+        .case-content p {
+            color: var(--muted-text);
+            font-size: 0.95rem;
+            line-height: 1.7;
+        }
+
+        .case-metric {
+            margin-top: 1.5rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid rgba(32, 143, 178, 0.1);
+        }
+
+        .case-metric-value {
+            font-family: 'Syne', sans-serif;
+            font-size: 1.8rem;
+            font-weight: 800;
+            color: var(--light-teal);
+        }
+
+        .case-card.featured .case-metric-value {
+            color: var(--accent-orange);
+        }
+
+        .case-metric-label {
+            font-size: 0.85rem;
+            color: var(--muted-text);
+        }
+
+        /* Contact Section */
+        .contact {
+            padding: 6rem 5%;
+            position: relative;
+        }
+
+        .contact-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 4rem;
+        }
+
+        .contact-form h2 {
+            font-size: clamp(2rem, 4vw, 3rem);
+            margin-bottom: 1rem;
+            color: var(--white);
+        }
+
+        .contact-form > p {
+            color: var(--muted-text);
+            margin-bottom: 2.5rem;
+            font-size: 1.05rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: var(--muted-text);
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 1rem 1.2rem;
+            background: var(--bg-mid);
+            border: 1px solid rgba(32, 143, 178, 0.2);
+            border-radius: 6px;
+            color: var(--white);
+            font-family: 'DM Sans', sans-serif;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: var(--primary-mid);
+            box-shadow: 0 0 0 3px rgba(32, 143, 178, 0.1);
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 140px;
+        }
+
+        .contact-info {
+            padding-left: 2rem;
+        }
+
+        .contact-info h3 {
+            font-size: 1.5rem;
+            margin-bottom: 2rem;
+            color: var(--white);
+        }
+
+        .info-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 1.2rem;
+            margin-bottom: 2rem;
+        }
+
+        .info-icon {
+            width: 45px;
+            height: 45px;
+            background: rgba(32, 143, 178, 0.1);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            flex-shrink: 0;
+            border: 1px solid rgba(32, 143, 178, 0.15);
+        }
+
+        .info-icon.phone {
+            background: rgba(206, 81, 25, 0.1);
+            border-color: rgba(206, 81, 25, 0.15);
+        }
+
+        .info-content h4 {
+            font-family: 'DM Sans', sans-serif;
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 0.3rem;
+            color: var(--white);
+        }
+
+        .info-content p {
+            color: var(--muted-text);
+            font-size: 0.95rem;
+        }
+
+        .info-content a {
+            color: var(--light-teal);
+            text-decoration: none;
+            transition: color 0.3s ease;
+        }
+
+        .info-content a:hover {
+            color: var(--white);
+        }
+
+        /* Footer */
+        footer {
+            padding: 2rem 5%;
+            border-top: 1px solid rgba(32, 143, 178, 0.1);
+            text-align: center;
+            color: var(--muted-text);
+            font-size: 0.9rem;
+        }
+
+        footer span {
+            color: var(--primary-mid);
+        }
+
+        /* Animations */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .animate-in {
+            animation: fadeInUp 0.8s ease forwards;
+        }
+
+        /* Responsive */
+        @media (max-width: 968px) {
+            .hero-stats {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .services-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .about-container {
+                grid-template-columns: 1fr;
+                gap: 3rem;
+            }
+
+            .case-studies-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .case-card.featured {
+                grid-row: span 1;
+            }
+
+            .contact-container {
+                grid-template-columns: 1fr;
+                gap: 3rem;
+            }
+
+            .contact-info {
+                padding-left: 0;
+            }
+
+            .hero-decoration {
+                display: none;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .nav-links {
+                display: none;
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(5, 14, 20, 0.98);
+                flex-direction: column;
+                justify-content: center;
+                gap: 2rem;
+            }
+
+            .nav-links.active {
+                display: flex;
+            }
+
+            .nav-links a {
+                font-size: 1.2rem;
+            }
+
+            .menu-toggle {
+                display: flex;
+            }
+
+            .hero {
+                padding-top: 6rem;
+            }
+
+            .hero-stats {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 1.5rem;
+            }
+
+            .stat-number {
+                font-size: 1.8rem;
+            }
+        }
+
+        /* Scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--bg-darkest);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--primary-dark);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--primary-mid);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Navigation -->
+    <nav>
+        <a href="#" class="nav-logo">
+            <div class="logo-mark">T</div>
+            <span class="logo-text">TUNJO</span>
+        </a>
+        <div class="menu-toggle" onclick="toggleMenu()">
+            <span></span>
+            <span></span>
+            <span></span>
+        </div>
+        <div class="nav-links" id="navLinks">
+            <a href="#servicios">Servicios</a>
+            <a href="#nosotros">Nosotros</a>
+            <a href="#casos">Casos</a>
+            <a href="#contacto">Contacto</a>
+            <a href="#contacto" class="nav-cta">Solicitar Demo</a>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="hero-content">
+            <div class="section-tag">Tecnología que transforma el agro</div>
+            <h1>Raíces locales, visión global</h1>
+            <p>Soluciones tecnológicas de vanguardia para el sector agrícola colombiano. Sensores, analítica avanzada y trazabilidad blockchain que potencian cada hectárea.</p>
+            <div class="hero-cta-group">
+                <a href="#contacto" class="btn-primary">Solicitar Demo</a>
+                <a href="#servicios" class="btn-secondary">Conocer más</a>
+            </div>
+
+            <div class="hero-stats">
+                <div class="stat-item">
+                    <span class="stat-number">12+</span>
+                    <span class="stat-label">Clientes activos</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-number">3x</span>
+                    <span class="stat-label">ROI promedio</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-number">98%</span>
+                    <span class="stat-label">Uptime de sensores</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-number">5+</span>
+                    <span class="stat-label">Regiones cubiertas</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="hero-decoration">
+            <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+                <path fill="none" stroke="currentColor" stroke-width="0.5" d="M100,10 L100,190 M10,100 L190,100 M30,30 L170,170 M30,170 L170,30"/>
+                <circle cx="100" cy="100" r="80" fill="none" stroke="currentColor" stroke-width="0.5"/>
+                <circle cx="100" cy="100" r="60" fill="none" stroke="currentColor" stroke-width="0.5"/>
+                <circle cx="100" cy="100" r="40" fill="none" stroke="currentColor" stroke-width="0.5"/>
+                <rect x="50" y="50" width="100" height="100" fill="none" stroke="currentColor" stroke-width="0.5" transform="rotate(45 100 100)"/>
+            </svg>
+        </div>
+    </section>
+
+    <!-- Services Section -->
+    <section class="services" id="servicios">
+        <div style="max-width: 1200px; margin: 0 auto; margin-bottom: 3rem;">
+            <div class="section-tag">Lo que hacemos</div>
+            <h2 style="font-size: clamp(2rem, 4vw, 3rem); color: var(--white);">Tecnología aplicada al campo</h2>
+        </div>
+
+        <div class="services-grid">
+            <div class="service-card">
+                <span class="service-number">01</span>
+                <div class="service-icon">📡</div>
+                <h3>Telemetría & IoT</h3>
+                <p>Sensores remotos para monitoreo de cultivos y condiciones climáticas en tiempo real. Datos precisos desde cualquier rincón de tu finca.</p>
+            </div>
+
+            <div class="service-card">
+                <span class="service-number">02</span>
+                <div class="service-icon">📊</div>
+                <h3>Analítica Avanzada</h3>
+                <p>Dashboards inteligentes con inteligencia de datos que transforman información cruda en decisiones estratégicas para tu operación agrícola.</p>
+            </div>
+
+            <div class="service-card">
+                <span class="service-number">03</span>
+                <div class="service-icon">🔗</div>
+                <h3>Trazabilidad Blockchain</h3>
+                <p>Seguimiento completo del origen al destino, especialmente diseñado para la exportación de café. Transparencia y confianza certificada.</p>
+            </div>
+
+            <div class="service-card">
+                <span class="service-number">04</span>
+                <div class="service-icon">☀️</div>
+                <h3>Energía Renovable Rural</h3>
+                <p>Sistemas solares para fincas fuera de la red eléctrica. Autonomía energética que reduce costos y eleva la productividad del campo.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- About Section -->
+    <section class="about" id="nosotros">
+        <div class="about-container">
+            <div class="about-text">
+                <div class="section-tag">Quiénes somos</div>
+                <h2>Innovación con propósito</h2>
+                <p>En <span class="about-highlight">Tunjo Smart Solutions</span> combinamos la profunda comprensión de la realidad agrícola colombiana con las tecnologías más avanzadas del mundo.</p>
+                <p>Nacimos en Montería, Córdoba, con la convicción de que el campo colombiano merece herramientas de clase mundial. Cada solución que diseñamos está pensada para resolver problemas reales de productores reales.</p>
+                <p>Nuestra misión es democratizar el acceso a la tecnología agrícola de precisión, cerrando la brecha entre el campo y la innovación digital.</p>
+            </div>
+
+            <div class="about-visual">
+                <div class="logo-display">
+                    <div class="corner-bracket tl"></div>
+                    <div class="corner-bracket tr"></div>
+                    <div class="corner-bracket bl"></div>
+                    <div class="corner-bracket br"></div>
+                    <div class="corner-dot tl"></div>
+                    <div class="corner-dot tr"></div>
+                    <div class="corner-dot bl"></div>
+                    <div class="corner-dot br"></div>
+                    <div class="logo-placeholder">
+                        <span>T</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Case Studies Section -->
+    <section class="case-studies" id="casos">
+        <div style="max-width: 1200px; margin: 0 auto; margin-bottom: 3rem;">
+            <div class="section-tag">Resultados reales</div>
+            <h2 style="font-size: clamp(2rem, 4vw, 3rem); color: var(--white);">Impacto medible</h2>
+        </div>
+
+        <div class="case-studies-grid">
+            <div class="case-card featured">
+                <div class="case-image">
+                    <span class="case-image-icon">☕</span>
+                </div>
+                <div class="case-content">
+                    <span class="case-tag">Trazabilidad</span>
+                    <h3>Cooperativa cafetera del Huila</h3>
+                    <p>Implementación de sistema de trazabilidad blockchain para más de 200 fincas asociadas, garantizando el origen y calidad del café en mercados internacionales.</p>
+                    <div class="case-metric">
+                        <div class="case-metric-value">+34%</div>
+                        <div class="case-metric-label">Incremento en precio por kg</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="case-card">
+                <div class="case-image">
+                    <span class="case-image-icon">☀️</span>
+                </div>
+                <div class="case-content">
+                    <span class="case-tag" style="background: rgba(206, 81, 25, 0.15); color: var(--accent-orange);">Energía Solar</span>
+                    <h3>Finca ganadera en Córdoba</h3>
+                    <p>Sistema fotovoltaico off-grid para operación ganadera sin acceso a red eléctrica.</p>
+                    <div class="case-metric">
+                        <div class="case-metric-value">$0</div>
+                        <div class="case-metric-label">Costo energético mensual</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="case-card">
+                <div class="case-image">
+                    <span class="case-image-icon">🥑</span>
+                </div>
+                <div class="case-content">
+                    <span class="case-tag">Sensores</span>
+                    <h3>Aguacate Hass en Antioquia</h3>
+                    <p>Red de sensores climáticos para predicción de condiciones adversas y optimización de riego.</p>
+                    <div class="case-metric">
+                        <div class="case-metric-value">−60%</div>
+                        <div class="case-metric-label">Reducción de pérdidas por clima</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Contact Section -->
+    <section class="contact" id="contacto">
+        <div class="contact-container">
+            <div class="contact-form">
+                <div class="section-tag">Hablemos</div>
+                <h2>Empecemos a transformar tu operación</h2>
+                <p>Cuéntanos sobre tu proyecto y te mostraremos cómo la tecnología puede llevar tu producción al siguiente nivel.</p>
+
+                <form onsubmit="event.preventDefault(); alert('¡Gracias por tu mensaje! Te contactaremos pronto.');">
+                    <div class="form-group">
+                        <label for="name">Nombre completo</label>
+                        <input type="text" id="name" name="name" required placeholder="Tu nombre">
+                    </div>
+                    <div class="form-group">
+                        <label for="email">Correo electrónico</label>
+                        <input type="email" id="email" name="email" required placeholder="tu@email.com">
+                    </div>
+                    <div class="form-group">
+                        <label for="company">Empresa / Finca</label>
+                        <input type="text" id="company" name="company" placeholder="Nombre de tu operación">
+                    </div>
+                    <div class="form-group">
+                        <label for="message">¿Qué necesitas?</label>
+                        <textarea id="message" name="message" required placeholder="Cuéntanos sobre tu proyecto..."></textarea>
+                    </div>
+                    <button type="submit" class="btn-primary" style="width: 100%;">Enviar mensaje</button>
+                </form>
+            </div>
+
+            <div class="contact-info">
+                <h3>Información de contacto</h3>
+
+                <div class="info-item">
+                    <div class="info-icon">✉️</div>
+                    <div class="info-content">
+                        <h4>Email</h4>
+                        <p><a href="mailto:contacto@tunjosolutions.com">contacto@tunjosolutions.com</a></p>
+                    </div>
+                </div>
+
+                <div class="info-item">
+                    <div class="info-icon phone">📱</div>
+                    <div class="info-content">
+                        <h4>Teléfono / WhatsApp</h4>
+                        <p><a href="tel:+573000000000">+57 300 000 0000</a></p>
+                    </div>
+                </div>
+
+                <div class="info-item">
+                    <div class="info-icon">📍</div>
+                    <div class="info-content">
+                        <h4>Ubicación</h4>
+                        <p>Montería, Córdoba, Colombia</p>
+                    </div>
+                </div>
+
+                <div class="info-item">
+                    <div class="info-icon">🌐</div>
+                    <div class="info-content">
+                        <h4>Web</h4>
+                        <p><a href="https://tunjosolutions.com" target="_blank">tunjosolutions.com</a></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+        <p>© 2026 <span>Tunjo Smart Solutions SAS</span> — Montería, Colombia. Tecnología que transforma el agro.</p>
+    </footer>
+
+    <script>
+        function toggleMenu() {
+            document.getElementById('navLinks').classList.toggle('active');
+        }
+
+        // Smooth scroll
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    document.getElementById('navLinks').classList.remove('active');
+                }
+            });
+        });
+
+        // Navbar background on scroll
+        window.addEventListener('scroll', () => {
+            const nav = document.querySelector('nav');
+            if (window.scrollY > 50) {
+                nav.style.background = 'rgba(5, 14, 20, 0.95)';
+            } else {
+                nav.style.background = 'rgba(5, 14, 20, 0.7)';
+            }
+        });
+    </script>
+
+</body>
+</html>

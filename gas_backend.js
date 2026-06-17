@@ -21,6 +21,9 @@ var SHEETS = {
   COTIZACION_TASAS:            'Cotizacion_tasas',
   LISTAS:                      'Listas',
   ETIQUETAS:                   'Etiquetas',
+  FACTOR_PRESENTACION:         'factor_presentacion',
+  CONVERSIONES_TIPO:           'conversiones_tipo',
+  MERMAS:                      'Mermas',
 };
 
 // ── Helpers generales ─────────────────────────────────────
@@ -236,15 +239,23 @@ function aCOP(valor, moneda, tasa_usd, tasa_eur) {
   return valor;
 }
 
-// ── Factor de presentación ────────────────────────────────
+// ── Presentaciones ────────────────────────────────────────
 
-function factorPresentacion(presentacion, cantidad_kg) {
-  var p = (presentacion || '').trim();
-  if (p === '250g')   return 0.25;
-  if (p === '500g')   return 0.5;
-  if (p === '1Kg')    return 1;
-  if (p === '12Kg')   return 12;
-  if (p === 'Granel') return parseFloat(cantidad_kg || 1);
+function getPresentaciones() {
+  var cache  = CacheService.getScriptCache();
+  var cached = cache.get('presentaciones');
+  if (cached) return JSON.parse(cached);
+  var data = sheetToObjects(SHEETS.FACTOR_PRESENTACION);
+  cache.put('presentaciones', JSON.stringify(data), 21600);
+  return data;
+}
+
+function factorPresentacion(presentacion) {
+  var p    = (presentacion || '').trim();
+  var data = getPresentaciones();
+  for (var i = 0; i < data.length; i++) {
+    if (String(data[i].nombre).trim() === p) return parseFloat(data[i].relacion_kilo || 1);
+  }
   return 1;
 }
 
@@ -282,6 +293,8 @@ function doGet(e) {
       else if (action === 'listRFQs')                result = listRFQs();
       else if (action === 'verificarDisponibilidad') result = verificarDisponibilidad(p.cotizacionId);
       else if (action === 'getTasas')                result = getTasas();
+      else if (action === 'getPresentaciones')       result = { ok: true, presentaciones: getPresentaciones() };
+      else if (action === 'getConversiones')         result = { ok: true, conversiones: getConversiones() };
       else result = { ok: false, error: 'Accion desconocida: ' + action };
     }
 
@@ -449,7 +462,7 @@ function _recalcularCostosEstandar(cotizacionId) {
 
   // Remove all existing non-manual costs for this cotizacion
   deleteRows(SHEETS.COTIZACION_COSTOS, function(r) {
-    return r.cotizacion_id === cotizacionId && (r.tipo || '') !== 'manual';
+    return r.cotizacion_id === cotizacionId && (r.tipo || '') === 'estandar';
   });
 
   // Re-add standard costs based on etiquetas matching (deduplicated per item)
@@ -476,7 +489,7 @@ function _recalcularCostosEstandar(cotizacionId) {
         cotizacion_id: cotizacionId,
         cot_item_id:   item.cot_item_id,
         nombre:        c.nombre,
-        tipo:          c.tipo || 'estandar',
+        tipo:          'estandar',
         moneda:        'COP',
         valor_kg:      parseFloat(c.valor_cop_kg || 0),
         incoterm_id:   parseFloat(c.incoterm_max  || 0),
@@ -489,12 +502,162 @@ function _recalcularCostosEstandar(cotizacionId) {
   if (nuevaFilas.length) batchAppendRows(SHEETS.COTIZACION_COSTOS, nuevaFilas);
 }
 
+// ── Mermas por selección ──────────────────────────────────
+
+function _recalcularMermas(cotizacionId) {
+  var mermasRows = getMermas();
+  if (!mermasRows.length) return;
+
+  var cot = filterArr(sheetToObjects(SHEETS.COTIZACIONES),
+    function(r) { return r.cotizacion_id === cotizacionId; })[0];
+  if (!cot) return;
+  var tasaUSD = parseFloat(cot.tasa_usd || 0);
+  var tasaEUR = parseFloat(cot.tasa_eur || 0);
+
+  var cotItems = filterArr(sheetToObjects(SHEETS.COTIZACION_ITEMS),
+    function(i) { return i.cotizacion_id === cotizacionId; });
+
+  // Read costos excluding merma (to avoid circularity in EXW base)
+  var baseCostos = filterArr(sheetToObjects(SHEETS.COTIZACION_COSTOS),
+    function(c) { return c.cotizacion_id === cotizacionId && c.tipo !== 'merma'; });
+
+  // Replace all existing merma costs for this cotización
+  deleteRows(SHEETS.COTIZACION_COSTOS, function(r) {
+    return r.cotizacion_id === cotizacionId && r.tipo === 'merma';
+  });
+
+  var timestamp  = now();
+  var nuevasFilas = [];
+
+  for (var i = 0; i < cotItems.length; i++) {
+    var item     = cotItems[i];
+    var ignorado = item.ignorado === true || String(item.ignorado).toUpperCase() === 'TRUE';
+    if (ignorado) continue;
+
+    var itemTags = _parseEtiquetas(item.etiquetas);
+    var mermaTotal = 0;
+    for (var m = 0; m < mermasRows.length; m++) {
+      var mr       = mermasRows[m];
+      var etiqueta = String(mr.etiqueta || '').trim().toLowerCase();
+      var coincide = false;
+      for (var e = 0; e < itemTags.length; e++) {
+        if (itemTags[e] === etiqueta) { coincide = true; break; }
+      }
+      if (!coincide) continue;
+      var total = _parsePct(mr.pct_merma_defectos) + _parsePct(mr.pct_merma_mallas);
+      if (total > mermaTotal) mermaTotal = total;
+    }
+
+    if (mermaTotal <= 0) continue;
+
+    // EXW base per kg: lote cost + EXW-level costs (incoterm_id = 1), excl. merma
+    var costoEXWkg = parseFloat(item.costo_lote_kg || 0);
+    var itemCostos = filterArr(baseCostos, function(c) { return c.cot_item_id === item.cot_item_id; });
+    for (var k = 0; k < itemCostos.length; k++) {
+      var c = itemCostos[k];
+      if (parseFloat(c.incoterm_id || 0) === 1) {
+        costoEXWkg += aCOP(parseFloat(c.valor_kg || 0), c.moneda, tasaUSD, tasaEUR);
+      }
+    }
+
+    var costoMermaKg = costoEXWkg * mermaTotal / (1 - mermaTotal);
+    if (costoMermaKg <= 0) continue;
+
+    nuevasFilas.push({
+      costo_id:      uid(),
+      cotizacion_id: cotizacionId,
+      cot_item_id:   item.cot_item_id,
+      nombre:        'Merma por selección',
+      tipo:          'merma',
+      moneda:        'COP',
+      valor_kg:      Math.round(costoMermaKg),
+      incoterm_id:   1,
+      editable:      true,
+      created_at:    timestamp,
+      updated_at:    timestamp,
+    });
+  }
+
+  if (nuevasFilas.length) batchAppendRows(SHEETS.COTIZACION_COSTOS, nuevasFilas);
+}
+
+// ── Conversiones de tipo de café ──────────────────────────
+
+function getConversiones() {
+  return sheetToObjects(SHEETS.CONVERSIONES_TIPO);
+}
+
+function getMermas() {
+  return sheetToObjects(SHEETS.MERMAS);
+}
+
+// Parses "1.5%", 1.5, or 0.015 → decimal fraction
+function _parsePct(val) {
+  var s = String(val || '').trim();
+  if (!s) return 0;
+  if (s.indexOf('%') !== -1) return parseFloat(s) / 100;
+  var n = parseFloat(s);
+  if (isNaN(n)) return 0;
+  return n > 1 ? n / 100 : n;
+}
+
+function _buildConvGraph(conversiones) {
+  var graph = {};
+  for (var i = 0; i < conversiones.length; i++) {
+    var c = conversiones[i];
+    var deVal = '', aVal = '', mVal = 0;
+    for (var k in c) {
+      var kl = k.toLowerCase();
+      if      (kl === 'de')    deVal = String(c[k] || '').trim().toLowerCase();
+      else if (kl === 'a')     aVal  = String(c[k] || '').trim().toLowerCase();
+      else if (kl === 'merma') mVal  = parseFloat(c[k] || 0);
+    }
+    if (!deVal || !aVal) continue;
+    if (mVal > 1) mVal = mVal / 100;
+    if (!graph[deVal]) graph[deVal] = {};
+    graph[deVal][aVal] = 1 - mVal;
+  }
+  return graph;
+}
+
+// Retorna el rendimiento compuesto (0–1) de `de` a `a`, o null si no hay camino.
+// memo se comparte entre llamadas del mismo request para evitar recalcular.
+function _computeConvFactor(de, a, graph, memo) {
+  if (de === a) return 1;
+  var key = de + '→' + a;
+  if (memo[key] !== undefined) return memo[key];
+
+  var queue   = [{ node: de, factor: 1 }];
+  var visited = {};
+  visited[de] = true;
+
+  while (queue.length) {
+    var curr      = queue.shift();
+    var neighbors = graph[curr.node] || {};
+    for (var next in neighbors) {
+      var accumulated = curr.factor * neighbors[next];
+      if (next === a) {
+        memo[key] = accumulated;
+        return accumulated;
+      }
+      if (!visited[next]) {
+        visited[next] = true;
+        queue.push({ node: next, factor: accumulated });
+      }
+    }
+  }
+
+  memo[key] = null;
+  return null;
+}
+
 // ── Verificación de disponibilidad ───────────────────────
 
 function verificarDisponibilidad(cotizacionId) {
   if (!cotizacionId) return { ok: false, error: 'cotizacionId requerido' };
 
   _recalcularCostosEstandar(cotizacionId);
+  _recalcularMermas(cotizacionId);
 
   var cotItems    = filterArr(sheetToObjects(SHEETS.COTIZACION_ITEMS),
     function(i) { return i.cotizacion_id === cotizacionId; });
@@ -502,8 +665,12 @@ function verificarDisponibilidad(cotizacionId) {
   var disponibles = filterArr(sheetToObjects(SHEETS.DISPONIBILIDADES),
     function(d) { return d.activo === true || d.activo === 'TRUE'; });
 
-  var resultados     = [];
-  var hayIncompletos = false;
+  var resultados        = [];
+  var hayIncompletos    = false;
+  var conversiones      = getConversiones();
+  var convGraph         = _buildConvGraph(conversiones);
+  var convMemo          = {};
+  var convHuerfanos     = {};
 
   for (var idx = 0; idx < cotItems.length; idx++) {
     var item         = cotItems[idx];
@@ -526,43 +693,80 @@ function verificarDisponibilidad(cotizacionId) {
       continue;
     }
 
-    var factor       = factorPresentacion(item.presentacion, cantidadUnid);
-    var cantidadKg   = item.presentacion === 'Granel' ? cantidadUnid : cantidadUnid * factor;
-    var variedadItem = (item.variedad || '').toLowerCase();
-    var lotesCandidatos = filterArr(disponibles, function(d) {
-      if ((d.variedad || '').toLowerCase() !== variedadItem) return false;
+    var factor        = factorPresentacion(item.presentacion);
+    var cantidadKg    = cantidadUnid * factor;
+    var variedadItem  = (item.variedad      || '').trim().toLowerCase();
+    var estadoProceso = (item.estado_proceso || '').trim().toLowerCase();
+
+    var lotesCandidatos = [];
+    var diagEnRango = 0, diagSinConv = 0, diagSinStock = 0, diagReqKg = 0, diagDispKg = 0;
+    for (var li = 0; li < disponibles.length; li++) {
+      var d = disponibles[li];
+      if ((d.variedad || '').trim().toLowerCase() !== variedadItem) continue;
+
       var dDesde = d.fecha_disponible_desde instanceof Date
         ? d.fecha_disponible_desde : new Date(d.fecha_disponible_desde);
       var dHasta = d.fecha_disponible_hasta instanceof Date
         ? d.fecha_disponible_hasta : new Date(d.fecha_disponible_hasta);
-      if (isNaN(dDesde.getTime()) || isNaN(dHasta.getTime())) return false;
-      return fechaReq >= dDesde && fechaReq <= dHasta &&
-             parseFloat(d.kilos_disponibles || 0) >= cantidadKg;
-    });
+      if (isNaN(dDesde.getTime()) || isNaN(dHasta.getTime())) continue;
+      if (!(fechaReq >= dDesde && fechaReq <= dHasta)) continue;
+
+      diagEnRango++;
+      var dispTipo   = (d.presentacion || '').trim().toLowerCase();
+      var convFactor = _computeConvFactor(dispTipo, estadoProceso, convGraph, convMemo);
+      if (convFactor === null || convFactor <= 0) {
+        diagSinConv++;
+        var hKey = dispTipo + '→' + estadoProceso;
+        if (!convHuerfanos[hKey]) convHuerfanos[hKey] = { de: dispTipo, a: estadoProceso };
+        continue;
+      }
+
+      var requiredKg  = cantidadKg / convFactor;
+      var disponibleKg = parseFloat(d.kilos_disponibles || 0);
+      diagReqKg = Math.ceil(requiredKg);
+      if (disponibleKg > diagDispKg) diagDispKg = disponibleKg;
+      if (disponibleKg < requiredKg) { diagSinStock++; continue; }
+
+      lotesCandidatos.push({
+        lote:          d,
+        convFactor:    convFactor,
+        costoEfectivo: parseFloat(d.costo_cop_kg || 0) / convFactor,
+        requiredKg:    requiredKg,
+      });
+    }
 
     if (lotesCandidatos.length === 0) {
-      _actualizarEstadoItem(item.cot_item_id, '', 0, 'sin_disponibilidad');
+      _actualizarEstadoItem(item.cot_item_id, '', 0, 0, 'sin_disponibilidad');
+      var razon = diagEnRango === 0    ? 'sin_lotes_en_rango'
+                : diagSinConv > 0     ? 'sin_conversion'
+                : diagSinStock > 0    ? 'stock_insuficiente'
+                :                      'desconocido';
       resultados.push({ cot_item_id: item.cot_item_id, variedad: item.variedad,
-                        estado: 'sin_disponibilidad', lotes: [] });
+                        estado: 'sin_disponibilidad', lotes: [],
+                        diagnostico: { razon: razon, requerido_kg: diagReqKg, disponible_kg: diagDispKg } });
       hayIncompletos = true;
     } else {
-      lotesCandidatos.sort(function(a, b) {
-        return parseFloat(a.costo_cop_kg || 0) - parseFloat(b.costo_cop_kg || 0);
-      });
-      var loteOptimo     = lotesCandidatos[0];
-      var costo_lote_cop = parseFloat(loteOptimo.costo_cop_kg || 0);
+      lotesCandidatos.sort(function(a, b) { return a.costoEfectivo - b.costoEfectivo; });
+      var mejor          = lotesCandidatos[0];
+      var loteOptimo     = mejor.lote;
+      var costo_lote_cop = mejor.costoEfectivo;
 
-      _actualizarEstadoItem(item.cot_item_id, loteOptimo.lote_id, costo_lote_cop, 'completo');
+      _actualizarEstadoItem(item.cot_item_id, loteOptimo.lote_id, costo_lote_cop,
+                            parseFloat(loteOptimo.costo_cop_kg || 0), 'completo');
 
-      var lotesInfo = mapArr(lotesCandidatos, function(l) {
+      var lotesInfo = mapArr(lotesCandidatos, function(m) {
+        var l = m.lote;
         return {
           lote_id:                l.lote_id,
           variedad:               l.variedad,
           origen:                 l.origen,
           proceso:                l.proceso,
+          presentacion:           l.presentacion,
           costo_cop_kg:           parseFloat(l.costo_cop_kg || 0),
-          costo_cop:              parseFloat(l.costo_cop_kg || 0),
+          costo_efectivo_kg:      m.costoEfectivo,
+          factor_conversion:      m.convFactor,
           kilos_disponibles:      parseFloat(l.kilos_disponibles || 0),
+          kilos_requeridos:       m.requiredKg,
           fecha_disponible_desde: l.fecha_disponible_desde,
           fecha_disponible_hasta: l.fecha_disponible_hasta,
         };
@@ -584,7 +788,11 @@ function verificarDisponibilidad(cotizacionId) {
     function(r) { return mergeObj(r, { estado: nuevoEstado, updated_at: now() }); }
   );
 
-  return { ok: true, resultados: resultados, hay_incompletos: hayIncompletos };
+  var conversiones_faltantes = [];
+  for (var hk in convHuerfanos) conversiones_faltantes.push(convHuerfanos[hk]);
+
+  return { ok: true, resultados: resultados, hay_incompletos: hayIncompletos,
+           conversiones_faltantes: conversiones_faltantes };
 }
 
 // ── Asignar lote ──────────────────────────────────────────
@@ -596,13 +804,23 @@ function asignarLote(body) {
 
   if (!cot_item_id || !lote_id) return { ok: false, error: 'cot_item_id y lote_id requeridos' };
 
-  var lotes = sheetToObjects(SHEETS.DISPONIBILIDADES);
-  var lote  = findOne(lotes, function(l) { return l.lote_id === lote_id; });
+  var lotes   = sheetToObjects(SHEETS.DISPONIBILIDADES);
+  var lote    = findOne(lotes, function(l) { return l.lote_id === lote_id; });
   if (!lote) return { ok: false, error: 'Lote no encontrado' };
 
-  var costo_lote_cop = parseFloat(lote.costo_cop_kg || 0);
+  var cotItems = sheetToObjects(SHEETS.COTIZACION_ITEMS);
+  var cotItem  = findOne(cotItems, function(i) { return i.cot_item_id === cot_item_id; });
+  if (!cotItem) return { ok: false, error: 'Item de cotización no encontrado' };
 
-  _actualizarEstadoItem(cot_item_id, lote_id, costo_lote_cop, 'completo');
+  var dispTipo      = (lote.presentacion      || '').trim().toLowerCase();
+  var estadoProceso = (cotItem.estado_proceso  || '').trim().toLowerCase();
+  var convFactor    = _computeConvFactor(dispTipo, estadoProceso, _buildConvGraph(getConversiones()), {});
+  if (!convFactor || convFactor <= 0) convFactor = 1;
+
+  var costo_raw_cop  = parseFloat(lote.costo_cop_kg || 0);
+  var costo_lote_cop = costo_raw_cop / convFactor;
+
+  _actualizarEstadoItem(cot_item_id, lote_id, costo_lote_cop, costo_raw_cop, 'completo');
   recalcularTotales(cotizacion_id);
 
   var items          = filterArr(sheetToObjects(SHEETS.COTIZACION_ITEMS),
@@ -629,13 +847,14 @@ function _guardarPerfil(cot_item_id, perfil_sensorial) {
   );
 }
 
-function _actualizarEstadoItem(cot_item_id, lote_id, costo_lote_kg, estado) {
+function _actualizarEstadoItem(cot_item_id, lote_id, costo_lote_kg, costo_disponibilidad_kg, estado) {
   updateRows(SHEETS.COTIZACION_ITEMS,
     function(r) { return r.cot_item_id === cot_item_id; },
     function(r) { return mergeObj(r, {
-      lote_id:               lote_id,
-      costo_lote_kg:         costo_lote_kg,
-      estado_disponibilidad: estado,
+      lote_id:                  lote_id,
+      costo_lote_kg:            costo_lote_kg,
+      costo_disponibilidad_kg:  costo_disponibilidad_kg,
+      estado_disponibilidad:    estado,
     }); }
   );
 }
@@ -967,7 +1186,7 @@ function crearRFQ(body) {
         cotizacion_id: cotId,
         cot_item_id:   cotItemId,
         nombre:        c.nombre,
-        tipo:          c.tipo || 'estandar',
+        tipo:          'estandar',
         moneda:        'COP',
         valor_kg:      parseFloat(c.valor_cop_kg || 0),
         incoterm_id:   parseFloat(c.incoterm_max  || 0),
@@ -1216,9 +1435,9 @@ function recalcularTotales(cotizacion_id) {
 
     var precio_final_kg = parseFloat(item.costo_lote_kg || 0) + sumaCostosKgCOP;
     var cantidad        = parseFloat(item.cantidad_unidades || 0);
-    var factor          = factorPresentacion(item.presentacion, item.cantidad_unidades);
+    var factor          = factorPresentacion(item.presentacion);
     var precio_unitario = precio_final_kg * factor;
-    var total_cop       = item.presentacion === 'Granel' ? precio_unitario : precio_unitario * cantidad;
+    var total_cop       = precio_unitario * cantidad;
 
     itemUpdatesMap[item.cot_item_id] = {
       precio_final_kg: precio_final_kg,

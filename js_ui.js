@@ -48,24 +48,44 @@ function closeResultPopup() {
 }
 
 // ── Banner disponibilidad ─────────────────────────────────
-function renderDisponibilidadBanner(resultados) {
-  var banner   = document.getElementById('disponibilidad-banner');
-  var sinDisp  = resultados.filter(function(r) { return r.estado === 'sin_disponibilidad'; });
-  var sinFecha = resultados.filter(function(r) { return r.estado === 'sin_fecha_requerida'; });
+function renderDisponibilidadBanner(resultados, conversionesFaltantes) {
+  var banner    = document.getElementById('disponibilidad-banner');
+  var sinDisp   = resultados.filter(function(r) { return r.estado === 'sin_disponibilidad'; });
+  var sinFecha  = resultados.filter(function(r) { return r.estado === 'sin_fecha_requerida'; });
+  var huerfanos = conversionesFaltantes || [];
 
-  if (!sinDisp.length && !sinFecha.length) {
+  if (!sinDisp.length && !sinFecha.length && !huerfanos.length) {
     banner.classList.add('hidden');
     return;
   }
 
-  var html = '<strong>⚠️ Atención — ítems sin disponibilidad</strong><ul style="margin:.5rem 0 0 1rem">';
-  sinDisp.forEach(function(r) {
-    html += '<li><strong>' + r.variedad + '</strong>: no hay lotes que cumplan variedad, fecha y stock.</li>';
-  });
-  sinFecha.forEach(function(r) {
-    html += '<li><strong>' + r.variedad + '</strong>: sin fecha requerida en el RFQ.</li>';
-  });
-  html += '</ul><p style="margin-top:.5rem;font-size:.8rem">Imprimir desactivado hasta resolver.</p>';
+  var html = '';
+
+  if (sinDisp.length || sinFecha.length) {
+    html += '<strong>⚠️ Atención — ítems sin disponibilidad</strong><ul style="margin:.5rem 0 0 1rem">';
+    sinDisp.forEach(function(r) {
+      var d = r.diagnostico || {};
+      var detalle = d.razon === 'sin_lotes_en_rango'   ? 'no hay lotes con esa variedad en las fechas requeridas.'
+                  : d.razon === 'sin_conversion'        ? 'lotes encontrados pero sin conversión configurada (ver tabla abajo).'
+                  : d.razon === 'stock_insuficiente'    ? 'stock insuficiente — requiere ' + d.requerido_kg + ' Kg, disponible: ' + d.disponible_kg + ' Kg.'
+                  :                                      'no hay lotes que cumplan variedad, fecha y stock.';
+      html += '<li><strong>' + r.variedad + '</strong>: ' + detalle + '</li>';
+    });
+    sinFecha.forEach(function(r) {
+      html += '<li><strong>' + r.variedad + '</strong>: sin fecha requerida en el RFQ.</li>';
+    });
+    html += '</ul><p style="margin-top:.5rem;font-size:.8rem">Imprimir desactivado hasta resolver.</p>';
+  }
+
+  if (huerfanos.length) {
+    html += '<p style="margin-top:.6rem"><strong>⚠️ Conversiones faltantes</strong> — las siguientes combinaciones no tienen ruta en <em>conversiones_tipo</em>:</p>';
+    html += '<ul style="margin:.3rem 0 0 1rem;font-size:.85rem">';
+    huerfanos.forEach(function(h) {
+      html += '<li><code>' + h.de + '</code> → <code>' + h.a + '</code></li>';
+    });
+    html += '</ul>';
+  }
+
   banner.innerHTML = html;
   banner.classList.remove('hidden');
 }
@@ -93,14 +113,21 @@ function formatMon(v, moneda) {
 }
 
 // ── Helpers de cálculo ────────────────────────────────────
-function factorPresentacion(presentacion, cantidad_unidades) {
-  switch ((presentacion || '').trim()) {
-    case '250g':   return 0.25;
-    case '500g':   return 0.5;
-    case '1Kg':    return 1;
-    case '12Kg':   return 12;
-    case 'Granel': return parseFloat(cantidad_unidades || 1);
-    default:       return 1;
+function factorPresentacion(presentacion) {
+  var p = (presentacion || '').trim();
+  if (presentacionesCache) {
+    for (var i = 0; i < presentacionesCache.length; i++) {
+      if (String(presentacionesCache[i].nombre).trim() === p) {
+        return parseFloat(presentacionesCache[i].relacion_kilo || 1);
+      }
+    }
+  }
+  switch (p) {
+    case '250g':  return 0.25;
+    case '500g':  return 0.5;
+    case '1Kg':   return 1;
+    case '12Kg':  return 12;
+    default:      return 1;
   }
 }
 
@@ -118,9 +145,9 @@ var INCOTERMS = [
 
 // Costo total acumulado hasta el nivel de incoterm dado (en COP)
 // El costo base del lote (disponibilidades) siempre se incluye en nivel >= 1
-function calcIncotermTotal(loteCosto, itemCostos, nivel, tUSD, tEUR, factor, cant, presentacion) {
+function calcIncotermTotal(loteCosto, itemCostos, nivel, tUSD, tEUR, factor, cant) {
   if (!nivel) return 0;
-  var cantKg   = presentacion === 'Granel' ? parseFloat(cant) : parseFloat(cant) * factor;
+  var cantKg   = parseFloat(cant) * factor;
   var baseKgCOP = parseFloat(loteCosto || 0); // lote base → EXW
   itemCostos.forEach(function(c) {
     var cNivel = parseFloat(c.incoterm_id || 0);
@@ -201,12 +228,13 @@ function renderCotizacion(data, soloLectura, resultadosDisp) {
   var section = document.getElementById('cot-items-section');
   section.innerHTML = '';
 
-  // kg totales de todos los ítems (para prorrateo de costos globales)
+  // kg totales de ítems activos (para prorrateo de costos globales — ignorados excluidos)
   var totalKgTodos = 0;
   items.forEach(function(item) {
-    var f = factorPresentacion(item.presentacion, item.cantidad_unidades);
+    if (item.ignorado === true || String(item.ignorado).toUpperCase() === 'TRUE') return;
+    var f = factorPresentacion(item.presentacion);
     var c = parseFloat(item.cantidad_unidades || 0);
-    totalKgTodos += item.presentacion === 'Granel' ? c : c * f;
+    totalKgTodos += c * f;
   });
 
   // Costos globales: los que no tienen cot_item_id
@@ -237,11 +265,11 @@ function renderCotizacion(data, soloLectura, resultadosDisp) {
     }, 0);
 
     var pfKgCOP = parseFloat(item.costo_lote_kg || 0) + sumaCostosKgCOP;
-    var factor  = factorPresentacion(item.presentacion, item.cantidad_unidades);
+    var factor  = factorPresentacion(item.presentacion);
     var cant    = parseFloat(item.cantidad_unidades || 0);
-    var cantKg  = item.presentacion === 'Granel' ? cant : cant * factor;
+    var cantKg  = cant * factor;
     var puCOP   = pfKgCOP * factor;
-    var totalCOP  = item.presentacion === 'Granel' ? puCOP : puCOP * cant;
+    var totalCOP  = puCOP * cant;
     var totalUSD  = tUSD > 0 ? totalCOP / tUSD : 0;
     var totalEUR  = tEUR > 0 ? totalCOP / tEUR : 0;
 
@@ -250,10 +278,12 @@ function renderCotizacion(data, soloLectura, resultadosDisp) {
     var puMon   = monedaRFQ === 'USD' && tUSD > 0 ? puCOP / tUSD
                 : monedaRFQ === 'EUR' && tEUR > 0 ? puCOP / tEUR : puCOP;
 
-    var costoCompraCOP = parseFloat(item.costo_lote_kg || 0) * cantKg;
-    var coteLoteCOP    = totalCOP;
-    var coteLoteUSD    = totalUSD;
-    var coteLoteEUR    = totalEUR;
+    var costoDispKg  = parseFloat(item.costo_disponibilidad_kg || 0);
+    var costoTargetKg = parseFloat(item.costo_lote_kg || 0);
+    var coteLoteCOP   = totalCOP;
+    var coteLoteMon   = monedaRFQ === 'USD' && tUSD > 0 ? totalCOP / tUSD
+                      : monedaRFQ === 'EUR' && tEUR > 0 ? totalCOP / tEUR
+                      : totalCOP;
 
     var rfqItem  = rfqItems.find(function(r) { return r.rfq_item_id === item.rfq_item_id; }) || {};
     var fechaRaw = rfqItem.fecha_requerida;
@@ -314,7 +344,7 @@ function renderCotizacion(data, soloLectura, resultadosDisp) {
       var mon  = (c.moneda || 'COP').toUpperCase();
       var vCOP = aCOP(v, mon, tUSD, tEUR);
       var undCOP  = vCOP * factor;
-      var totCOP  = item.presentacion === 'Granel' ? vCOP * factor : vCOP * factor * cant;
+      var totCOP  = vCOP * factor * cant;
       var totMon  = monedaRFQ === 'USD' && tUSD > 0 ? totCOP / tUSD
                   : monedaRFQ === 'EUR' && tEUR > 0 ? totCOP / tEUR : totCOP;
 
@@ -347,9 +377,9 @@ function renderCotizacion(data, soloLectura, resultadosDisp) {
     var costosBaseRows = costosBase.map(costoRow).join('');
     var costosAdicRows = costosAdic.map(costoRow).join('');
 
-    // Valores globales prorrateados para este ítem
+    // Valores globales prorrateados para este ítem (omitir si ignorado)
     var prorrateoHtml = '';
-    if (globalCostos.length && totalKgTodos > 0) {
+    if (!ignorado && globalCostos.length && totalKgTodos > 0) {
       var proporcion = cantKg / totalKgTodos;
       var rows = globalCostos.map(function(gc) {
         var vCOP    = aCOP(parseFloat(gc.valor_kg || 0), gc.moneda, tUSD, tEUR);
@@ -413,100 +443,109 @@ function renderCotizacion(data, soloLectura, resultadosDisp) {
       '</div>' +
       // ── Línea 3: totales del lote ────────────────────────
       '<div class="form-grid" style="margin-bottom:.75rem">' +
-        '<div><label>Costo Compra COP (Disp.)</label>' +
-          '<strong>' + formatCOP(costoCompraCOP) + '</strong></div>' +
+        '<div><label>Costo Compra / Kg (Disponible)</label>' +
+          '<strong>' + formatCOP(costoDispKg) + '</strong></div>' +
+        '<div><label>Costo Compra / Kg (Target)</label>' +
+          '<strong>' + formatCOP(costoTargetKg) + '</strong></div>' +
         '<div><label>Costo Total Lote (COP)</label>' +
           '<strong id="tot-cop-' + item.cot_item_id + '">' + formatCOP(coteLoteCOP) + '</strong></div>' +
-        '<div><label>Costo Total Lote (USD)</label>' +
-          '<strong id="tot-usd-' + item.cot_item_id + '">' + formatUSD(coteLoteUSD) + '</strong></div>' +
-        '<div><label>Costo Total Lote (EUR)</label>' +
-          '<strong id="tot-eur-' + item.cot_item_id + '">' + formatEUR(coteLoteEUR) + '</strong></div>' +
+        '<div><label>Costo Total Lote (' + monedaRFQ + ')</label>' +
+          '<strong id="tot-mon-' + item.cot_item_id + '">' + formatMon(coteLoteMon, monedaRFQ) + '</strong></div>' +
       '</div>' +
       selectorLote +
-      // ── Detalle Costos ───────────────────────────────────
-      '<div style="margin-bottom:1rem">' +
-        '<div style="font-size:.8rem;font-weight:700;color:var(--accent2);margin-bottom:.35rem">Detalle Costos</div>' +
-        '<div class="tbl-wrap"><table>' + tblHeader +
-          '<tbody>' + (costosBaseRows || emptyRow) + '</tbody>' +
-        '</table></div>' +
-      '</div>' +
-      // ── Costos adicionales ───────────────────────────────
-      '<div style="margin-bottom:1rem">' +
-        '<div style="font-size:.8rem;font-weight:700;color:var(--accent2);margin-bottom:.35rem">Costos adicionales</div>' +
-        '<div class="tbl-wrap"><table>' + tblHeader +
-          '<tbody>' + (costosAdicRows || emptyRow) + '</tbody>' +
-        '</table></div>' +
-      '</div>' +
-      // ── Sub-totales por Incoterm ─────────────────────────
-      '<div style="margin-bottom:1rem">' +
-        '<div style="font-size:.8rem;font-weight:700;color:var(--accent2);margin-bottom:.35rem">Sub-totales por Incoterm</div>' +
-        '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:.4rem">' +
-        INCOTERMS.map(function(inc) {
-          var totInc    = calcIncotermTotal(parseFloat(item.costo_lote_kg || 0), itemCostos, inc.id, tUSD, tEUR, factor, cant, item.presentacion);
-          var totIncMon = monedaRFQ === 'USD' && tUSD > 0 ? totInc / tUSD
-                        : monedaRFQ === 'EUR' && tEUR > 0 ? totInc / tEUR : totInc;
-          return '<div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:.4rem .6rem;text-align:center">' +
-            '<div style="font-size:.7rem;font-weight:700;color:var(--muted)">' + inc.nombre + '</div>' +
-            '<div style="font-size:.8rem;font-weight:700">' + (totInc / 1e6).toFixed(3) + ' MM COP</div>' +
-            '<div style="font-size:.7rem;color:var(--muted)">' + formatMon(totIncMon / 1000, monedaRFQ) + ' K</div>' +
-          '</div>';
-        }).join('') +
-        '</div>' +
-      '</div>' +
-      // ── Comisiones y Descuentos (dinámico) ───────────────
-      (function() {
-        var emptyComision = '<tr><td colspan="5" style="color:var(--muted);text-align:center;font-size:.78rem">Sin tasas configuradas en la hoja Tasas</td></tr>';
-        var comisionRows = tasas.map(function(tasa) {
-          var override  = comisiones.filter(function(c) {
-            return String(c.cot_item_id) === String(item.cot_item_id)
-                && String(c.tasa_id) === String(tasa.tasa_id);
-          })[0];
-          var tasaValor = override ? parseFloat(override.tasa_valor) : parseFloat(tasa.tasa_valor || 0);
-          var nivel     = parseFloat(tasa.incoterm_aplicable || 0);
-          var baseTotal = calcIncotermTotal(parseFloat(item.costo_lote_kg || 0), itemCostos, nivel, tUSD, tEUR, factor, cant, item.presentacion);
-          var descuenta = tasa.descuenta === true || String(tasa.descuenta).toUpperCase() === 'TRUE';
-          var valor     = baseTotal * (tasaValor / 100) * (descuenta ? -1 : 1);
-          var valorUSD  = tUSD > 0 ? valor / tUSD : 0;
-          var valorEUR  = tEUR > 0 ? valor / tEUR : 0;
-          var incLabel  = (INCOTERMS.filter(function(i) { return i.id === nivel; })[0] || {}).nombre || '—';
+      // ── Detalle Costos / Adicionales / Incoterms / Tasas — ocultos si ignorado
+      (!ignorado
+        ? (
+          // ── Detalle Costos ─────────────────────────────
+          '<div style="margin-bottom:1rem">' +
+            '<div style="font-size:.8rem;font-weight:700;color:var(--accent2);margin-bottom:.35rem">Detalle Costos</div>' +
+            '<div class="tbl-wrap"><table>' + tblHeader +
+              '<tbody>' + (costosBaseRows || emptyRow) + '</tbody>' +
+            '</table></div>' +
+          '</div>' +
+          // ── Costos adicionales ─────────────────────────
+          '<div style="margin-bottom:1rem">' +
+            '<div style="font-size:.8rem;font-weight:700;color:var(--accent2);margin-bottom:.35rem">Costos adicionales</div>' +
+            '<div class="tbl-wrap"><table>' + tblHeader +
+              '<tbody>' + (costosAdicRows || emptyRow) + '</tbody>' +
+            '</table></div>' +
+          '</div>'
+        )
+        : '') +
+      (!ignorado
+        ? (
+          // ── Sub-totales por Incoterm ───────────────────
+          '<div style="margin-bottom:1rem">' +
+            '<div style="font-size:.8rem;font-weight:700;color:var(--accent2);margin-bottom:.35rem">Sub-totales por Incoterm</div>' +
+            '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:.4rem">' +
+            INCOTERMS.map(function(inc) {
+              var totInc    = calcIncotermTotal(parseFloat(item.costo_lote_kg || 0), itemCostos, inc.id, tUSD, tEUR, factor, cant);
+              var totIncMon = monedaRFQ === 'USD' && tUSD > 0 ? totInc / tUSD
+                            : monedaRFQ === 'EUR' && tEUR > 0 ? totInc / tEUR : totInc;
+              return '<div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:.4rem .6rem;text-align:center">' +
+                '<div style="font-size:.7rem;font-weight:700;color:var(--muted)">' + inc.nombre + '</div>' +
+                '<div style="font-size:.8rem;font-weight:700">' + (totInc / 1e6).toFixed(3) + ' MM COP</div>' +
+                '<div style="font-size:.7rem;color:var(--muted)">' + formatMon(totIncMon / 1000, monedaRFQ) + ' K</div>' +
+              '</div>';
+            }).join('') +
+            '</div>' +
+          '</div>' +
+          // ── Comisiones y Descuentos ────────────────────
+          (function() {
+            var emptyComision = '<tr><td colspan="5" style="color:var(--muted);text-align:center;font-size:.78rem">Sin tasas configuradas en la hoja Tasas</td></tr>';
+            var comisionRows = tasas.map(function(tasa) {
+              var override  = comisiones.filter(function(c) {
+                return String(c.cot_item_id) === String(item.cot_item_id)
+                    && String(c.tasa_id) === String(tasa.tasa_id);
+              })[0];
+              var tasaValor = override ? parseFloat(override.tasa_valor) : parseFloat(tasa.tasa_valor || 0);
+              var nivel     = parseFloat(tasa.incoterm_aplicable || 0);
+              var baseTotal = calcIncotermTotal(parseFloat(item.costo_lote_kg || 0), itemCostos, nivel, tUSD, tEUR, factor, cant);
+              var descuenta = tasa.descuenta === true || String(tasa.descuenta).toUpperCase() === 'TRUE';
+              var valor     = baseTotal * (tasaValor / 100) * (descuenta ? -1 : 1);
+              var valorUSD  = tUSD > 0 ? valor / tUSD : 0;
+              var valorEUR  = tEUR > 0 ? valor / tEUR : 0;
+              var incLabel  = (INCOTERMS.filter(function(i) { return i.id === nivel; })[0] || {}).nombre || '—';
 
-          var pctCell = soloLectura
-            ? '<td>' + tasaValor.toFixed(2) + '%</td>'
-            : '<td><div style="display:flex;align-items:center;gap:.3rem">' +
-                '<input type="number" step="0.01" value="' + tasaValor.toFixed(2) + '"' +
-                ' data-comision-item="' + item.cot_item_id + '"' +
-                ' data-tasa-id="' + tasa.tasa_id + '"' +
-                ' data-base-calculo="' + Math.round(baseTotal) + '"' +
-                ' data-descuenta="' + descuenta + '"' +
-                ' onchange="onComisionChange(this)"' +
-                ' style="width:80px" />' +
-                '<span style="font-size:.75rem;color:var(--muted)">%</span>' +
-              '</div></td>';
+              var pctCell = soloLectura
+                ? '<td>' + tasaValor.toFixed(2) + '%</td>'
+                : '<td><div style="display:flex;align-items:center;gap:.3rem">' +
+                    '<input type="number" step="0.01" value="' + tasaValor.toFixed(2) + '"' +
+                    ' data-comision-item="' + item.cot_item_id + '"' +
+                    ' data-tasa-id="' + tasa.tasa_id + '"' +
+                    ' data-base-calculo="' + Math.round(baseTotal) + '"' +
+                    ' data-descuenta="' + descuenta + '"' +
+                    ' onchange="onComisionChange(this)"' +
+                    ' style="width:80px" />' +
+                    '<span style="font-size:.75rem;color:var(--muted)">%</span>' +
+                  '</div></td>';
 
-          return '<tr>' +
-            '<td>' + (tasa.tasa_detalle || '—') +
-              ' <span class="tag tag-blue" style="font-size:.62rem">' + incLabel + '</span>' +
-              (descuenta ? ' <span class="tag tag-yellow" style="font-size:.62rem">↓ Desc.</span>' : '') +
-            '</td>' +
-            pctCell +
-            '<td id="com-cop-' + item.cot_item_id + '-' + tasa.tasa_id + '">' + Math.round(valor).toLocaleString('es-CO') + ' COP</td>' +
-            '<td id="com-usd-' + item.cot_item_id + '-' + tasa.tasa_id + '">' + formatUSD(valorUSD) + '</td>' +
-            '<td id="com-eur-' + item.cot_item_id + '-' + tasa.tasa_id + '">' + formatEUR(valorEUR) + '</td>' +
-          '</tr>';
-        }).join('');
+              return '<tr>' +
+                '<td>' + (tasa.tasa_detalle || '—') +
+                  ' <span class="tag tag-blue" style="font-size:.62rem">' + incLabel + '</span>' +
+                  (descuenta ? ' <span class="tag tag-yellow" style="font-size:.62rem">↓ Desc.</span>' : '') +
+                '</td>' +
+                pctCell +
+                '<td id="com-cop-' + item.cot_item_id + '-' + tasa.tasa_id + '">' + Math.round(valor).toLocaleString('es-CO') + ' COP</td>' +
+                '<td id="com-usd-' + item.cot_item_id + '-' + tasa.tasa_id + '">' + formatUSD(valorUSD) + '</td>' +
+                '<td id="com-eur-' + item.cot_item_id + '-' + tasa.tasa_id + '">' + formatEUR(valorEUR) + '</td>' +
+              '</tr>';
+            }).join('');
 
-        return '<div style="margin-bottom:1rem">' +
-          '<div style="font-size:.8rem;font-weight:700;color:var(--accent2);margin-bottom:.35rem">Detalle Comisiones y Descuentos</div>' +
-          '<div class="tbl-wrap"><table>' +
-            '<thead><tr>' +
-              '<th>Detalle</th><th>% (Editable)</th>' +
-              '<th>Valor (COP)</th><th>Valor (USD)</th><th>Valor (EUR)</th>' +
-            '</tr></thead>' +
-            '<tbody>' + (comisionRows || emptyComision) + '</tbody>' +
-          '</table></div>' +
-        '</div>';
-      })() +
-      prorrateoHtml +
+            return '<div style="margin-bottom:1rem">' +
+              '<div style="font-size:.8rem;font-weight:700;color:var(--accent2);margin-bottom:.35rem">Detalle Comisiones y Descuentos</div>' +
+              '<div class="tbl-wrap"><table>' +
+                '<thead><tr>' +
+                  '<th>Detalle</th><th>% (Editable)</th>' +
+                  '<th>Valor (COP)</th><th>Valor (USD)</th><th>Valor (EUR)</th>' +
+                '</tr></thead>' +
+                '<tbody>' + (comisionRows || emptyComision) + '</tbody>' +
+              '</table></div>' +
+            '</div>';
+          })() +
+          prorrateoHtml
+        )
+        : '') +
       // ── Perfil sensorial (sin cambios) ───────────────────
       '<div style="margin-top:.75rem">' +
         '<label style="font-weight:700;color:var(--accent2)">Perfil sensorial' +
@@ -546,9 +585,9 @@ function onCostoChange(input) {
 
   var tUSD   = parseFloat(tasaUSD || 0);
   var tEUR   = parseFloat(tasaEUR || 0);
-  var factor = factorPresentacion(presentacion, cantidad);
+  var factor = factorPresentacion(presentacion);
   var vCOP   = aCOP(newVal, moneda, tUSD, tEUR);
-  var subCOP = presentacion === 'Granel' ? vCOP * factor : vCOP * factor * cantidad;
+  var subCOP = vCOP * factor * cantidad;
 
   var subEl = document.getElementById('sub-' + costoId);
   if (subEl) subEl.textContent = Math.round(subCOP).toLocaleString('es-CO');
@@ -570,10 +609,10 @@ function recalcItemUI(itemId, loteCosto, cantidad, presentacion) {
   });
 
   var pfKgCOP  = loteCosto + sumaCOP;
-  var factor   = factorPresentacion(presentacion, cantidad);
+  var factor   = factorPresentacion(presentacion);
   var cant     = parseFloat(cantidad || 0);
   var puCOP    = pfKgCOP * factor;
-  var totalCOP = presentacion === 'Granel' ? puCOP : puCOP * cant;
+  var totalCOP = puCOP * cant;
   var totalUSD = tUSD > 0 ? totalCOP / tUSD : 0;
   var totalEUR = tEUR > 0 ? totalCOP / tEUR : 0;
 
@@ -587,9 +626,11 @@ function recalcItemUI(itemId, loteCosto, cantidad, presentacion) {
   el = document.getElementById('pu-mon-'  + itemId); if (el) el.textContent = formatMon(puMon, monRFQ);
   el = document.getElementById('pkg-cop-' + itemId); if (el) el.textContent = formatCOP(pfKgCOP);
   el = document.getElementById('pkg-mon-' + itemId); if (el) el.textContent = formatMon(pfKgMon, monRFQ);
+  var totalMon = monRFQ === 'USD' && tUSD > 0 ? totalCOP / tUSD
+               : monRFQ === 'EUR' && tEUR > 0 ? totalCOP / tEUR
+               : totalCOP;
   el = document.getElementById('tot-cop-' + itemId); if (el) el.textContent = formatCOP(totalCOP);
-  el = document.getElementById('tot-usd-' + itemId); if (el) el.textContent = formatUSD(totalUSD);
-  el = document.getElementById('tot-eur-' + itemId); if (el) el.textContent = formatEUR(totalEUR);
+  el = document.getElementById('tot-mon-' + itemId); if (el) el.textContent = formatMon(totalMon, monRFQ);
 }
 
 // ── Resumen multicurrency ─────────────────────────────────
@@ -606,9 +647,10 @@ function renderSummary(items, costos) {
   var grandUSD = 0;
   var grandEUR = 0;
 
-  // ── 1. Ítems ──────────────────────────────────────────────
+  // ── 1. Ítems (ignorados excluidos del total) ─────────────
   var itemRows = '';
   items.forEach(function(item) {
+    if (item.ignorado === true || String(item.ignorado).toUpperCase() === 'TRUE') return;
     var loteCosto = parseFloat(item.costo_lote_kg || 0);
     var inputs    = document.querySelectorAll('[data-item-id="' + item.cot_item_id + '"]');
     var sumaCOP   = 0;
@@ -626,10 +668,10 @@ function renderSummary(items, costos) {
     }
 
     var pfKgCOP = loteCosto + sumaCOP;
-    var factor  = factorPresentacion(item.presentacion, item.cantidad_unidades);
+    var factor  = factorPresentacion(item.presentacion);
     var cant    = parseFloat(item.cantidad_unidades || 0);
     var puCOP   = pfKgCOP * factor;
-    var totCOP  = item.presentacion === 'Granel' ? puCOP : puCOP * cant;
+    var totCOP  = puCOP * cant;
     var totUSD  = tUSD > 0 ? totCOP / tUSD : 0;
     var totEUR  = tEUR > 0 ? totCOP / tEUR : 0;
 
@@ -653,12 +695,13 @@ function renderSummary(items, costos) {
       '</tr>';
   });
 
-  // ── 2. Tasas (grouped across all items) ──────────────────
+  // ── 2. Tasas (ignorados excluidos) ───────────────────────
   var tasaTotals = {}; // { tasa_id: { detalle, cop, usd, eur } }
   if (tasas.length > 0) {
     items.forEach(function(item) {
+      if (item.ignorado === true || String(item.ignorado).toUpperCase() === 'TRUE') return;
       var itemCostos = costos.filter(function(c) { return c.cot_item_id === item.cot_item_id; });
-      var factor     = factorPresentacion(item.presentacion, item.cantidad_unidades);
+      var factor     = factorPresentacion(item.presentacion);
       var cant       = parseFloat(item.cantidad_unidades || 0);
       var loteCosto  = parseFloat(item.costo_lote_kg || 0);
 
@@ -669,7 +712,7 @@ function renderSummary(items, costos) {
         })[0];
         var tasaValor = override ? parseFloat(override.tasa_valor) : parseFloat(tasa.tasa_valor || 0);
         var nivel     = parseFloat(tasa.incoterm_aplicable || 0);
-        var baseTotal = calcIncotermTotal(loteCosto, itemCostos, nivel, tUSD, tEUR, factor, cant, item.presentacion);
+        var baseTotal = calcIncotermTotal(loteCosto, itemCostos, nivel, tUSD, tEUR, factor, cant);
         var descuenta = tasa.descuenta === true || String(tasa.descuenta).toUpperCase() === 'TRUE';
         var valor     = baseTotal * (tasaValor / 100) * (descuenta ? -1 : 1);
         var valorUSD  = tUSD > 0 ? valor / tUSD : 0;
