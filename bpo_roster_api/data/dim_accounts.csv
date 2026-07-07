@@ -1,0 +1,12 @@
+account_id,account_name,account_code,industry,region,program_type,contract_start_date,contract_status,seat_capacity,account_manager,timezone_coverage,created_at
+ACC-001,NexTel Communications,NEXTEL,Telecom,North America,Technical Support,2025-03-04,Active,180,Diane Foster,EST,2025-03-04T09:00:00
+ACC-002,Meridian Health Partners,MERIHP,Healthcare,North America,Customer Support,2021-01-31,Active,150,Marcus Lee,CST,2021-01-31T09:00:00
+ACC-003,Solstice Retail Group,SOLRTG,Retail,North America,Customer Support,2019-07-26,Active,120,Priya Nair,PST,2019-07-26T09:00:00
+ACC-004,Vantage Financial Services,VANFIN,Finance,North America,Back Office,2025-08-03,Active,90,Carlos Mendoza,EST,2025-08-03T09:00:00
+ACC-005,Aurora Insurance Co.,AURINS,Insurance,EMEA,Customer Support,2024-02-12,Active,100,Rebecca Shaw,GMT,2024-02-12T09:00:00
+ACC-006,BrightPath E-Commerce,BRTECM,E-commerce,APAC,Customer Support,2022-09-25,Active,200,Tomas Novak,GMT+8,2022-09-25T09:00:00
+ACC-007,Kestrel Airlines,KESAIR,Travel,APAC,Customer Support,2019-01-19,Active,130,Amara Okafor,GMT+8,2019-01-19T09:00:00
+ACC-008,Union Grid Utilities,UNIGRD,Utilities,North America,Technical Support,2023-09-01,Active,70,Liam O'Connell,CST,2023-09-01T09:00:00
+ACC-009,Cascade Logistics,CASLOG,Logistics,LATAM,Back Office,2024-04-17,Active,85,Grace Tanaka,GMT-5,2024-04-17T09:00:00
+ACC-010,Pioneer EdTech Solutions,PIONED,Education,North America,Sales,2025-04-15,Active,60,Victor Alvarado,PST,2025-04-15T09:00:00
+ACC-011,Halcyon Software Inc.,HALSFT,Technology,EMEA,Technical Support,2022-09-15,Active,140,Nadia Petrova,GMT+1,2022-09-15T09:00:00
