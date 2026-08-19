@@ -1,1 +1,399 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cotización — Servicios técnicos cadena del café</title>
+<style>
+  :root{
+    --ink:#17242e;
+    --muted:#5b6b78;
+    --line:#d3dde3;
+    --accent:#002D4C;        /* navy — estructura */
+    --accent-2:#236F96;      /* azul — etiquetas secundarias */
+    --accent-3:#CE5119;      /* naranja — acento cálido */
+    --accent-soft:#e9f0f5;
+    --bg:#ffffff;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:"Calibri","Segoe UI",Arial,sans-serif;
+    color:var(--ink);
+    background:#f2f3f2;
+    font-size:10.7pt;
+    line-height:1.45;
+  }
+  .page{
+    width:210mm;
+    min-height:297mm;
+    margin:14px auto;
+    padding:16mm 15mm 14mm;
+    background:var(--bg);
+    box-shadow:0 2px 14px rgba(0,0,0,.12);
+  }
 
+  /* Encabezado */
+  .head{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    border-bottom:2.5px solid var(--accent);
+    box-shadow:0 2.5px 0 0 var(--accent-3);
+    padding-bottom:10px;
+    gap:16px;
+  }
+  .brand .name{
+    font-size:15pt;
+    font-weight:700;
+    color:var(--accent);
+    letter-spacing:.2px;
+    line-height:1.15;
+  }
+  .brand .tag{
+    font-size:9pt;
+    color:var(--accent-2);
+    margin-top:2px;
+  }
+  .brand .meta{
+    font-size:8.6pt;
+    color:var(--muted);
+    margin-top:6px;
+    line-height:1.5;
+  }
+  .doc-badge{
+    text-align:right;
+    min-width:44mm;
+  }
+  .doc-badge .title{
+    font-size:13pt;
+    font-weight:700;
+    text-transform:uppercase;
+    letter-spacing:.6px;
+    color:var(--ink);
+  }
+  .doc-badge table{font-size:8.7pt;color:var(--muted);border-collapse:collapse;margin-left:auto;margin-top:6px;}
+  .doc-badge td{padding:1px 0;}
+  .doc-badge td.k{padding-right:8px;text-align:right;color:var(--muted);}
+  .doc-badge td.v{text-align:right;color:var(--ink);font-weight:600;}
+
+  /* Bloques de partes */
+  .parties{
+    display:flex;
+    gap:14px;
+    margin-top:14px;
+  }
+  .parties .card + .card{
+    border-left:1px solid var(--line);
+    padding-left:18px;
+  }
+  .card{
+    flex:1;
+    padding:2px 0;
+  }
+  .card h4{
+    margin:0 0 4px;
+    font-size:8pt;
+    text-transform:uppercase;
+    letter-spacing:.7px;
+    color:var(--accent-2);
+    font-weight:700;
+  }
+  .card p{margin:0;font-size:9.2pt;line-height:1.5;}
+  .card .strong{font-weight:700;}
+
+  h2.section{
+    font-size:9pt;
+    text-transform:uppercase;
+    letter-spacing:.8px;
+    color:var(--accent);
+    border-bottom:1px solid var(--line);
+    padding-bottom:4px;
+    margin:16px 0 8px;
+  }
+  .objeto{
+    font-size:9.5pt;
+    text-align:justify;
+    margin:0;
+  }
+
+  /* Tabla de ítems */
+  table.items{
+    width:100%;
+    border-collapse:collapse;
+    margin-top:4px;
+    font-size:9.1pt;
+  }
+  table.items thead th{
+    background:var(--accent);
+    color:#fff;
+    font-weight:600;
+    text-align:left;
+    padding:7px 8px;
+    font-size:8.4pt;
+    text-transform:uppercase;
+    letter-spacing:.4px;
+    border:1px solid var(--accent);
+  }
+  table.items td{
+    border:1px solid var(--line);
+    padding:7px 8px;
+    vertical-align:top;
+  }
+  table.items tbody tr:nth-child(even){background:#fafbfa;}
+  .col-id{width:11mm;text-align:center;font-weight:700;color:var(--accent-3);}
+  .col-num{width:26mm;text-align:right;white-space:nowrap;}
+  .col-qty{width:22mm;text-align:center;}
+  .desc .t{font-weight:700;display:block;margin-bottom:2px;}
+  .desc small{color:var(--muted);font-size:8.3pt;line-height:1.4;display:block;}
+  tr.add td{background:var(--accent-soft) !important;}
+  tr.add .col-id{color:var(--accent-3);}
+  .add-flag{font-size:7.8pt;color:var(--accent-3);font-weight:700;text-transform:uppercase;letter-spacing:.4px;}
+
+  tr.total td{
+    border:none;
+    border-top:2px solid var(--accent);
+    padding-top:9px;
+    font-size:11pt;
+  }
+  tr.total .lbl{text-align:right;font-weight:600;text-transform:uppercase;letter-spacing:.5px;}
+  tr.total .amt{text-align:right;font-weight:700;color:var(--accent);white-space:nowrap;font-size:12.5pt;}
+  .total-words{
+    text-align:right;
+    font-size:8.5pt;
+    color:var(--muted);
+    margin:3px 2px 0;
+    font-style:italic;
+  }
+
+  /* Notas */
+  ul.notes{
+    margin:6px 0 0;
+    padding-left:16px;
+    font-size:8.9pt;
+    line-height:1.55;
+  }
+  ul.notes li{margin-bottom:4px;}
+  .tax-note{
+    margin-top:10px;
+    border-left:3px solid var(--accent-3);
+    background:var(--accent-soft);
+    padding:8px 11px;
+    font-size:8.8pt;
+    border-radius:0 5px 5px 0;
+  }
+  .tax-note .lbl{font-weight:700;color:var(--accent-2);text-transform:uppercase;font-size:7.8pt;letter-spacing:.5px;}
+
+  /* Condiciones en grilla */
+  .cond{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:5px 18px;
+    font-size:8.9pt;
+    margin-top:6px;
+  }
+  .cond .row{border-bottom:1px dotted var(--line);padding:3px 0;}
+  .cond .row b{color:var(--ink);}
+
+  /* Firma */
+  .sign{
+    margin-top:26px;
+    display:flex;
+    gap:40px;
+  }
+  .sign .box{flex:1;}
+  .sign .line{border-top:1px solid var(--ink);margin-top:34px;padding-top:5px;font-size:8.9pt;}
+  .sign .line b{display:block;}
+  .sign small{color:var(--muted);}
+
+  .foot{
+    margin-top:18px;
+    border-top:1px solid var(--line);
+    padding-top:7px;
+    font-size:7.7pt;
+    color:var(--muted);
+    text-align:center;
+  }
+  .ph{background:#fff6da;padding:0 3px;border-radius:2px;color:#8a6d1a;}
+
+  @media print{
+    body{background:#fff;}
+    .page{margin:0;box-shadow:none;width:auto;min-height:auto;padding:14mm 14mm 12mm;}
+    tr,td,th{page-break-inside:avoid;}
+    thead{display:table-header-group;}
+  }
+  @page{size:A4 portrait;margin:0;}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- ENCABEZADO -->
+  <div class="head">
+    <div class="brand">
+      <div class="name"><span class="ph">[RAZÓN SOCIAL DEL OFERENTE]</span></div>
+      <div class="tag">Servicios técnicos especializados — Cadena de valor del café</div>
+      <div class="meta">
+        NIT: <span class="ph">[NIT]</span> &nbsp;·&nbsp; <span class="ph">[Ciudad]</span>, Colombia<br>
+        Tel: <span class="ph">[Teléfono]</span> &nbsp;·&nbsp; <span class="ph">[correo@dominio.com]</span>
+      </div>
+    </div>
+    <div class="doc-badge">
+      <div class="title">Cotización</div>
+      <table>
+        <tr><td class="k">N.º</td><td class="v"><span class="ph">[COT-000]</span></td></tr>
+        <tr><td class="k">Fecha</td><td class="v">18 de agosto de 2026</td></tr>
+        <tr><td class="k">Validez</td><td class="v">30 días</td></tr>
+        <tr><td class="k">Moneda</td><td class="v">COP</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <!-- PARTES -->
+  <div class="parties">
+    <div class="card">
+      <h4>Dirigido a</h4>
+      <p>
+        <span class="strong">Instituto de Investigación de Recursos Biológicos Alexander von Humboldt</span><br>
+        Centro de Economía y Finanzas de la Biodiversidad<br>
+        At.: Manuela Montoya Castrillón — Supervisora del contrato
+      </p>
+    </div>
+    <div class="card">
+      <h4>Proyecto / Convenio</h4>
+      <p>
+        Convenio 141-2024 (24-244) — Fondo para la Vida y la Biodiversidad.<br>
+        "Pactos hacia la restauración socioecológica y la bioeconomía sostenible en el Corredor de Vida del Cesar" — Objetivo 2, Fase II.
+      </p>
+    </div>
+  </div>
+
+  <!-- OBJETO -->
+  <h2 class="section">Objeto de la cotización</h2>
+  <p class="objeto">
+    Prestación de servicios técnicos especializados, con autonomía técnica, administrativa y financiera, para el
+    fortalecimiento de capacidades, la transferencia metodológica y la asistencia técnica en la cadena productiva del café,
+    en los municipios de Agustín Codazzi y La Jagua de Ibirico (Cesar). El proceso combina formación teórico-práctica en
+    análisis físico, tueste, evaluación sensorial, fermentación y manejo poscosecha, así como la evaluación técnica de
+    muestras de café obtenidas en el proceso de fermentación.
+  </p>
+
+  <!-- TABLA -->
+  <h2 class="section">Detalle de la propuesta económica</h2>
+  <table class="items">
+    <thead>
+      <tr>
+        <th class="col-id">Ítem</th>
+        <th>Descripción</th>
+        <th class="col-num">V/r unidad</th>
+        <th class="col-qty">Cantidad</th>
+        <th class="col-num">V/r total</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="col-id">1</td>
+        <td class="desc">
+          <span class="t">Capacitación virtual en análisis físico y sensorial</span>
+          <small>Jornada virtual de capacitación en análisis físico, tueste y evaluación sensorial, incluyendo formatos de catación. Entregable: memorias, presentaciones, registros de asistencia y certificados (Producto 2).</small>
+        </td>
+        <td class="col-num">$ 2.500.000</td>
+        <td class="col-qty">1</td>
+        <td class="col-num">$ 2.500.000</td>
+      </tr>
+
+      <tr>
+        <td class="col-id">2</td>
+        <td class="desc">
+          <span class="t">Formación presencial en fermentación y poscosecha</span>
+          <small>Proceso presencial de formación en fermentación y manejo poscosecha para mínimo 20 participantes, con intensidad de 2 días por jornada. Mínimo 2 jornadas, una por municipio (Agustín Codazzi y La Jagua de Ibirico). Entregable: memorias, presentaciones, registros de asistencia y certificados (Producto 3). No incluye viáticos ni desplazamientos.</small>
+        </td>
+        <td class="col-num">$ 7.000.000<br><small style="color:var(--muted)">por jornada</small></td>
+        <td class="col-qty">2</td>
+        <td class="col-num">$ 14.000.000</td>
+      </tr>
+
+      <tr class="add">
+        <td class="col-id">2.1</td>
+        <td class="desc">
+          <span class="t">Jornada adicional de formación presencial en fermentación y poscosecha <span class="add-flag">· opcional</span></span>
+          <small>Jornada presencial adicional a las dos (2) mínimas del ítem 2, en las mismas condiciones (2 días, mínimo 20 participantes). Se factura por cada jornada adicional efectivamente contratada.</small>
+        </td>
+        <td class="col-num">$ 6.300.000<br><small style="color:var(--muted)">por jornada</small></td>
+        <td class="col-qty">Según demanda</td>
+        <td class="col-num">$ 6.300.000&nbsp;c/u&nbsp;<sup>(*)</sup></td>
+      </tr>
+
+      <tr>
+        <td class="col-id">3</td>
+        <td class="desc">
+          <span class="t">Evaluación técnica de la calidad de muestras de café</span>
+          <small>Recepción y evaluación técnica de al menos 20 muestras de café obtenidas en el proceso de fermentación, con análisis físico y sensorial. Entregable: elaboración y entrega de fichas técnicas por muestra (Producto 4).</small>
+        </td>
+        <td class="col-num">$ 3.800.000</td>
+        <td class="col-qty">1</td>
+        <td class="col-num">$ 3.800.000</td>
+      </tr>
+
+      <tr>
+        <td class="col-id">4</td>
+        <td class="desc">
+          <span class="t">Socialización virtual de resultados</span>
+          <small>Jornada virtual de socialización de resultados dirigida a los actores territoriales vinculados. Entregable: memorias de la jornada (Producto 5).</small>
+        </td>
+        <td class="col-num">$ 1.000.000</td>
+        <td class="col-qty">1</td>
+        <td class="col-num">$ 1.000.000</td>
+      </tr>
+
+      <tr class="total">
+        <td></td>
+        <td class="lbl" colspan="3">Valor total de la cotización (ítems 1, 2, 3 y 4)</td>
+        <td class="amt">$ 21.300.000</td>
+      </tr>
+    </tbody>
+  </table>
+  <div class="total-words">Son: Veintiún millones trescientos mil pesos colombianos M/Cte. (COP&nbsp;$21.300.000).</div>
+
+  <ul class="notes">
+    <li><sup>(*)</sup> El ítem 2.1 corresponde a la tarifa unitaria por cada jornada presencial adicional a las dos (2) mínimas incluidas en el ítem 2. <b>No está incluido en el valor total</b> y se factura por jornada efectivamente contratada.</li>
+    <li>El servicio incluye, sin costo adicional, el <b>plan de trabajo y cronograma</b> (Producto 1, dentro de los 5 días posteriores a la legalización), el acompañamiento y las reuniones de seguimiento, y el <b>informe técnico final consolidado</b> con recomendaciones y conclusiones (Producto 6).</li>
+    <li>Los valores <b>no incluyen viáticos ni desplazamientos</b>, por ser rubros asumidos por el proyecto, conforme a lo indicado en la solicitud.</li>
+  </ul>
+
+  <!-- IMPUESTOS -->
+  <div class="tax-note">
+    <span class="lbl">Impuestos</span> &nbsp; Los valores aquí presentados <b>no incluyen impuestos</b>. En caso de aplicar, el IVA y demás
+    tributos, retenciones o gravámenes de ley de la República de Colombia se liquidarán y facturarán de manera adicional,
+    de acuerdo con la normatividad tributaria vigente y la calidad tributaria del oferente al momento de la facturación.
+  </div>
+
+  <!-- CONDICIONES -->
+  <h2 class="section">Condiciones de la oferta</h2>
+  <div class="cond">
+    <div class="row"><b>Plazo de ejecución:</b> Hasta el 30 de noviembre de 2026.</div>
+    <div class="row"><b>Lugar de prestación:</b> Agustín Codazzi y La Jagua de Ibirico (Cesar); componentes virtuales de forma remota.</div>
+    <div class="row"><b>Validez de la oferta:</b> 30 días calendario.</div>
+    <div class="row"><b>Forma de pago:</b> <span class="ph">[A convenir con el supervisor]</span>.</div>
+    <div class="row"><b>Moneda:</b> Pesos colombianos (COP).</div>
+    <div class="row"><b>Modalidad:</b> Servicios con autonomía técnica, administrativa y financiera.</div>
+  </div>
+
+  <!-- FIRMA -->
+  <div class="sign">
+    <div class="box">
+      <div class="line">
+        <b><span class="ph">[Nombre del representante legal]</span></b>
+        <small><span class="ph">[Cargo]</span> · <span class="ph">[Razón social del oferente]</span> · NIT <span class="ph">[NIT]</span></small>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot">
+    Cotización elaborada exclusivamente con el detalle solicitado por el Instituto Humboldt para el Convenio 141-2024 (24-244).
+    Documento de carácter comercial — no constituye contrato.
+  </div>
+
+</div>
+</body>
+</html>
