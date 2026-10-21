@@ -1,519 +1,574 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Traza Labels</title>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Sistema de Cotización de Café</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
-    --bg: #f6f4ef;
-    --panel: #ffffff;
-    --ink: #22201c;
-    --muted: #6d675d;
-    --line: #e2ddd2;
-    --accent: #6b4f2a;
-    --accent-ink: #ffffff;
-    --danger: #a3362b;
+    --bg:      #f7f4ef;
+    --surface: #ffffff;
+    --border:  #d6cfc4;
+    --accent:  #5c3d1e;
+    --accent2: #8b6240;
+    --text:    #2c1d0e;
+    --muted:   #7a6652;
+    --green:   #2e7d32;
+    --red:     #c62828;
+    --radius:  8px;
+    --shadow:  0 2px 8px rgba(0,0,0,.08);
   }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0;
-    font-family: "Montserrat", system-ui, sans-serif;
-    background: var(--bg);
-    color: var(--ink);
-    font-size: 14px;
-  }
-  header {
-    display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between;
-    padding: 14px 20px; border-bottom: 1px solid var(--line); background: var(--panel);
-  }
-  header h1 { font-size: 17px; margin: 0; font-weight: 600; }
-  .toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
-  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
-  .seg button { border: 0; background: transparent; padding: 7px 12px; font: inherit; cursor: pointer; color: var(--muted); }
-  .seg button.on { background: var(--accent); color: var(--accent-ink); }
-  main { display: grid; grid-template-columns: minmax(300px, 400px) 1fr; gap: 20px; padding: 20px; }
-  @media (max-width: 860px) { main { grid-template-columns: 1fr; padding: 16px; } }
-  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
-  .card + .card { margin-top: 16px; }
-  .card h2 { font-size: 14px; margin: 0 0 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
-  label.f { display: block; margin-bottom: 10px; font-size: 12px; font-weight: 600; color: var(--muted); }
-  label.f input, label.f textarea {
-    display: block; width: 100%; margin-top: 4px; padding: 8px 10px; font: inherit; font-size: 14px; font-weight: 400;
-    color: var(--ink); border: 1px solid var(--line); border-radius: 8px; background: #fff;
-  }
-  label.f textarea { resize: vertical; min-height: 60px; }
-  label.f textarea.short { min-height: 0; }
-  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-  .hint { font-weight: 400; color: var(--muted); font-size: 11px; }
-  .qr-in { display: flex; gap: 10px; align-items: flex-start; }
-  .qr-in textarea { min-height: 72px; font-family: ui-monospace, monospace; font-size: 11px !important; }
-  .qr-thumb { width: 72px; height: 72px; flex: none; border: 1px dashed var(--line); border-radius: 6px; object-fit: contain; background: #fff; }
-  .btn {
-    border: 1px solid var(--line); background: #fff; color: var(--ink); padding: 8px 14px; border-radius: 8px;
-    font: inherit; font-weight: 600; cursor: pointer;
-  }
-  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
-  .btn.small { padding: 4px 10px; font-size: 12px; }
-  .btn.danger { color: var(--danger); }
-  .btn:disabled { opacity: .5; cursor: default; }
-  .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
-  .err { color: var(--danger); font-size: 12px; min-height: 16px; margin-top: 6px; }
-  .traces { list-style: none; margin: 0; padding: 0; }
-  .traces li { display: flex; gap: 10px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); }
-  .traces li:first-child { border-top: 0; }
-  .traces img { width: 36px; height: 36px; }
-  .traces .t { flex: 1; min-width: 0; }
-  .traces .t b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .traces .t span { color: var(--muted); font-size: 12px; }
-  .traces li.editing { background: #faf6ee; }
-  .empty { color: var(--muted); font-size: 13px; }
-  .summary { color: var(--muted); font-size: 13px; }
-  .preview { min-width: 0; }
-  .sheets { display: flex; flex-direction: column; gap: 20px; align-items: center; }
-  .sheets canvas { display: block; width: 100%; max-width: 816px; aspect-ratio: 8.5 / 11; background: #fff; box-shadow: 0 2px 10px rgba(0,0,0,.12); }
+  body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
 
-  @page { size: letter; margin: 0; }
+  /* ── Layout ─────────────────────────────────────── */
+  header { background: var(--accent); color: #fff; padding: 1rem 2rem; display: flex; align-items: center; gap: 1rem; }
+  header h1 { font-size: 1.2rem; font-weight: 700; }
+  nav { display: flex; gap: .5rem; margin-left: auto; }
+  nav button { background: rgba(255,255,255,.15); border: 1px solid rgba(255,255,255,.3); color: #fff; padding: .4rem .9rem; border-radius: var(--radius); cursor: pointer; font-size: .85rem; transition: background .2s; }
+  nav button:hover, nav button.active { background: rgba(255,255,255,.3); }
+  main { max-width: 1100px; margin: 2rem auto; padding: 0 1rem; }
+
+  /* ── Cards ──────────────────────────────────────── */
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 1.5rem; margin-bottom: 1.5rem; }
+  .card-title { font-size: 1rem; font-weight: 700; color: var(--accent); margin-bottom: 1rem; border-bottom: 1px solid var(--border); padding-bottom: .5rem; }
+
+  /* ── Forms ──────────────────────────────────────── */
+  .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: .75rem; }
+  label { font-size: .82rem; color: var(--muted); display: block; margin-bottom: .25rem; }
+  input, select, textarea { width: 100%; padding: .5rem .7rem; border: 1px solid var(--border); border-radius: var(--radius); font-size: .9rem; background: var(--bg); color: var(--text); }
+  input:focus, select:focus { outline: 2px solid var(--accent2); border-color: var(--accent2); }
+
+  /* ── Buttons ────────────────────────────────────── */
+  .btn { display: inline-flex; align-items: center; gap: .4rem; padding: .5rem 1.1rem; border: none; border-radius: var(--radius); cursor: pointer; font-size: .88rem; font-weight: 600; transition: filter .15s; }
+  .btn:hover    { filter: brightness(.92); }
+  .btn:disabled { opacity: .45; cursor: not-allowed; filter: none; }
+  .btn-primary   { background: var(--accent);  color: #fff; }
+  .btn-secondary { background: var(--accent2); color: #fff; }
+  .btn-ghost  { background: var(--bg); border: 1px solid var(--border); color: var(--text); }
+  .btn-danger { background: var(--red); color: #fff; }
+  .btn-sm { padding: .3rem .7rem; font-size: .78rem; }
+
+  /* ── Tables ─────────────────────────────────────── */
+  .tbl-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+  th { background: var(--accent); color: #fff; padding: .55rem .7rem; text-align: left; white-space: nowrap; }
+  td { padding: .5rem .7rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  tr:hover td { background: #faf7f3; }
+  td input[type="number"] { width: 90px; padding: .3rem .5rem; }
+
+  /* ── RFQ item row ───────────────────────────────── */
+  .item-row { display: grid; grid-template-columns: 1fr 1fr 1fr 130px 90px 1fr 1fr 1fr 1fr auto; gap: .5rem; align-items: end; padding: .6rem; border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: .5rem; background: var(--bg); }
+  .item-row > [style*="grid-column"] { grid-column: 1 / -1; }
+
+  /* ── Tags ───────────────────────────────────────── */
+  .tag { display: inline-block; padding: .2rem .55rem; border-radius: 99px; font-size: .72rem; font-weight: 700; }
+  .tag-green  { background: #e8f5e9; color: var(--green); }
+  .tag-yellow { background: #fff8e1; color: #e65100; }
+  .tag-blue   { background: #e3f2fd; color: #1565c0; }
+
+  /* ── Toast ──────────────────────────────────────── */
+  #toast { position: fixed; bottom: 1.5rem; right: 1.5rem; background: var(--accent); color: #fff; padding: .75rem 1.2rem; border-radius: var(--radius); box-shadow: var(--shadow); display: none; z-index: 999; font-size: .9rem; }
+
+  /* ── Popup resultado RFQ ────────────────────────── */
+  #result-popup { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 1100; align-items: center; justify-content: center; display: none; }
+  #result-popup.show { display: flex; }
+  .popup-box { background: var(--surface); border-radius: var(--radius); box-shadow: 0 8px 32px rgba(0,0,0,.18); padding: 2rem 2.5rem; max-width: 480px; width: 90%; text-align: center; position: relative; animation: popIn .25s ease; }
+  @keyframes popIn { from { transform: scale(.85); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .cot-loading { display: flex; flex-direction: column; align-items: center; gap: 1rem; padding: 3rem; color: var(--muted); font-size: .9rem; }
+  .cot-loading .spinner-ring { width: 40px; height: 40px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }
+  .skel-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.5rem; margin-bottom: 1.5rem; }
+  .skel-line { height: 12px; border-radius: 4px; background: linear-gradient(90deg, var(--border) 25%, var(--bg) 50%, var(--border) 75%); background-size: 200% 100%; animation: shimmer 1.4s infinite; margin-bottom: .75rem; }
+  @keyframes shimmer { to { background-position: -200% 0; } }
+  .popup-icon  { font-size: 3rem; margin-bottom: .75rem; }
+  .popup-title { font-size: 1.1rem; font-weight: 700; margin-bottom: .5rem; }
+  .popup-msg   { font-size: .88rem; color: var(--muted); line-height: 1.6; text-align: left; }
+  .popup-close { position: absolute; top: .75rem; right: .75rem; background: none; border: none; font-size: 1.2rem; cursor: pointer; color: var(--muted); }
+  .popup-close:hover { color: var(--text); }
+
+  /* ── Modal lote ─────────────────────────────────── */
+  #modal-lote { position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 1000; align-items: center; justify-content: center; display: none; }
+  #modal-edit-rfq.show { display: flex !important; }
+  .modal-box { background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow); padding: 1.5rem; max-width: 560px; width: 90%; max-height: 80vh; overflow-y: auto; }
+
+  /* ── Banner disponibilidad ──────────────────────── */
+  #disponibilidad-banner { background: #fff3e0; border: 1px solid #ff9800; border-radius: var(--radius); padding: 1rem; margin-bottom: 1rem; color: #e65100; }
+
+  /* ── Summary ────────────────────────────────────── */
+  .summary-box { background: #f0ebe3; border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem; margin-top: 1rem; }
+
+  /* ── Utilities ──────────────────────────────────── */
+  .hidden  { display: none !important; }
+  .flex    { display: flex; }
+  .gap-1   { gap: .5rem; }
+  .mt-1    { margin-top: .75rem; }
+  .mb-1    { margin-bottom: .75rem; }
+  .text-muted { color: var(--muted); font-size: .8rem; }
+
+  /* ── Screen: hide print container ───────────────────── */
+  #print-container { display: none; }
+
+  /* ── Print ───────────────────────────────────────────── */
   @media print {
-    body { background: #fff; }
-    header, .panel, .summary { display: none !important; }
-    main { display: block; padding: 0; }
-    .sheets { gap: 0; }
-    .sheets canvas { width: 8.5in; height: 11in; max-width: none; box-shadow: none; break-after: page; }
+    body > *:not(#print-container) { display: none !important; }
+    #print-container { display: block !important; margin: 0; padding: 0; }
+
+    /* Cover — page 1 */
+    #print-cover {
+      width: 100%; height: 100vh;
+      page-break-after: always;
+      position: relative; z-index: 10;
+      overflow: hidden;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      -webkit-print-color-adjust: exact; print-color-adjust: exact;
+    }
+    #print-cover-bg {
+      position: absolute; top: 0; left: 0;
+      width: 100%; height: 100%;
+      object-fit: cover; z-index: 0;
+    }
+    #print-cover-logo {
+      position: absolute; top: 2cm;
+      height: 2.2cm; width: auto;
+      z-index: 2;
+    }
+    #print-cover-box {
+      background: rgba(0, 71, 34, 0.72);
+      border: 2px solid #fff;
+      padding: 1.1cm 2cm;
+      text-align: center;
+      max-width: 72%;
+      position: relative; z-index: 2;
+      -webkit-print-color-adjust: exact; print-color-adjust: exact;
+    }
+    #print-cover-title {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 23pt; font-weight: 600;
+      color: #fff; text-align: center;
+      line-height: 1.4;
+    }
+    #print-cover-date {
+      position: absolute; bottom: 1.5cm;
+      width: 100%; text-align: center;
+      font-family: 'Montserrat', sans-serif;
+      font-size: 10pt; font-weight: 700;
+      color: #fff; z-index: 2;
+    }
+
+    /* Content — pages 2+ */
+    #print-content {
+      padding: .8cm 1cm 2.5cm;
+      font-family: 'Montserrat', sans-serif;
+      font-size: 10pt; color: #1a1a1a;
+    }
+    #print-header-section {
+      margin-bottom: .75cm; padding-bottom: .5cm;
+      border-bottom: 2px solid #004722;
+    }
+    .print-meta {
+      display: flex; gap: 2rem;
+      font-size: 12pt; font-weight: 600;
+      color: #004722; margin-bottom: .4cm;
+    }
+    .print-doc-header {
+      font-size: 9pt; color: #333;
+      line-height: 1.6; white-space: pre-line;
+    }
+
+    /* Items table */
+    #print-items-table {
+      width: 100%; border-collapse: collapse;
+      font-size: 9pt; font-family: 'Montserrat', sans-serif;
+      margin-bottom: .75cm;
+    }
+    #print-items-table th {
+      background: #004722 !important; color: #fff !important;
+      padding: .3cm .4cm; text-align: left; font-weight: 700;
+      -webkit-print-color-adjust: exact; print-color-adjust: exact;
+    }
+    #print-items-table td {
+      padding: .28cm .4cm;
+      border-bottom: 1px solid #ddd; vertical-align: middle;
+    }
+    #print-items-table tr:nth-child(even) td {
+      background: #f7f7f2 !important;
+      -webkit-print-color-adjust: exact; print-color-adjust: exact;
+    }
+
+    /* Grand Grand Total */
+    #print-grand-total {
+      margin-top: .6cm;
+      padding: .5cm .75cm;
+      background: #004722 !important;
+      color: #fff;
+      font-family: 'Montserrat', sans-serif;
+      font-size: 11pt; font-weight: 700;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+      -webkit-print-color-adjust: exact; print-color-adjust: exact;
+    }
+
+    /* Document footer text */
+    #print-footer-content {
+      font-size: 8.5pt; color: #555;
+      line-height: 1.5; white-space: pre-line;
+      border-top: 1px solid #ccc;
+      padding-top: .4cm; margin-top: .5cm;
+    }
+
+    /* Running footer — logo left, page number right */
+    #print-page-footer {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      height: 1.2cm;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 1cm;
+      border-top: 1px solid #ccc;
+      background: #fff !important;
+      font-size: 8pt; color: #666;
+      font-family: 'Montserrat', sans-serif;
+      z-index: 5;
+      -webkit-print-color-adjust: exact; print-color-adjust: exact;
+    }
+    #print-logo { height: .8cm; width: auto; }
+  }
+
+  /* @page rules apply to paged media regardless of @media print */
+  @page {
+    margin-bottom: 1.8cm;
+    @bottom-right {
+      content: counter(page);
+      font-family: 'Montserrat', sans-serif;
+      font-size: 8pt;
+      color: #666;
+      padding-right: .5cm;
+    }
+  }
+  /* Suppress page number on cover */
+  @page :first {
+    @bottom-right { content: none; }
   }
 </style>
 </head>
 <body>
+
 <header>
-  <h1>Traza Labels</h1>
-  <div class="toolbar">
-    <div class="seg" role="group" aria-label="Label language">
-      <button type="button" data-lang="es" class="on">Español</button>
-      <button type="button" data-lang="en">English</button>
-    </div>
-    <button type="button" class="btn primary" id="export" disabled>Export PDF</button>
-  </div>
+  <span style="font-size:1.6rem">☕</span>
+  <h1>CaféQuote</h1>
+  <nav>
+    <button class="active" onclick="showPage('rfq')">Nuevo RFQ</button>
+    <button onclick="showPage('list')">Mis RFQs</button>
+    <button onclick="showPage('cot')">Cotización</button>
+    <button onclick="showPage('dir')">Directorio</button>
+  </nav>
 </header>
 
 <main>
-  <section class="panel">
-    <form class="card" id="form" autocomplete="off">
-      <h2 id="form-title">New trace</h2>
-      <div class="row">
-        <label class="f">Reference number<input name="ref" required></label>
-        <label class="f">Labels<input name="qty" type="number" min="1" step="1" value="14" required></label>
-      </div>
-      <label class="f">Product name <span class="hint">NOMBRE PRODUCTO</span><input name="product" required placeholder="Chiroso"></label>
-      <label class="f">Address <span class="hint">DIRECCION, with province; line breaks become commas</span><textarea class="short" name="address" rows="2" required placeholder="Santa Bárbara, Antioquia"></textarea></label>
-      <label class="f">Process<input name="process" required placeholder="100% Lavado Terroir"></label>
-      <label class="f">Tasting notes<textarea name="notes" required placeholder="Notas a chocolate, durazno, piña…"></textarea></label>
-      <label class="f">Facility line <span class="hint">optional, printed as typed</span><textarea name="facility" placeholder="Tostado y Envasado por … NSA-…"></textarea></label>
-      <label class="f">QR code <span class="hint">paste qr_binary, or upload a PNG</span>
-        <span class="qr-in">
-          <textarea name="qr" placeholder="data:image/png;base64,…"></textarea>
-          <img class="qr-thumb" id="qr-thumb" alt="">
-        </span>
-      </label>
-      <input type="file" id="qr-file" accept="image/png,image/jpeg">
-      <div class="err" id="err"></div>
-      <div class="actions">
-        <button class="btn primary" id="save" type="submit">Add trace</button>
-        <button class="btn" id="cancel" type="button" hidden>Cancel</button>
-      </div>
-    </form>
 
+  <!-- ── PAGE: NUEVO RFQ ─────────────────────────── -->
+  <div id="page-rfq">
     <div class="card">
-      <h2>Traces</h2>
-      <ul class="traces" id="traces"></ul>
-      <p class="empty" id="empty">No traces yet. Add one above. Traces stay until the page is reloaded.</p>
+      <div class="card-title">📋 Crear RFQ</div>
+      <div class="form-grid">
+        <div><label>Cliente</label><input id="rfq-cliente" placeholder="Ej. Nordic Roasters" /></div>
+        <div><label>Asesor</label><input id="rfq-asesor" placeholder="Tu nombre" /></div>
+        <div><label>Fecha</label><input id="rfq-fecha" type="date" /></div>
+        <div><label>Moneda solicitada</label>
+          <select id="rfq-moneda">
+            <option value="USD">USD — Dólar</option>
+            <option value="EUR">EUR — Euro</option>
+            <option value="COP">COP — Peso colombiano</option>
+          </select>
+        </div>      </div>
     </div>
 
     <div class="card">
-      <h2>Watermark</h2>
-      <p class="summary" style="margin-top:0" id="wm-status"></p>
-      <input type="file" id="wm-file" accept="image/png,image/jpeg">
+      <div class="card-title">📦 Ítems del RFQ</div>
+      <div id="rfq-items-container"></div>
+      <button class="btn btn-ghost mt-1" onclick="addRfqItem()">+ Agregar ítem</button>
     </div>
-  </section>
 
-  <section class="preview">
-    <p class="summary" id="summary"></p>
-    <div class="sheets" id="sheets"></div>
-  </section>
+    <div class="flex gap-1" style="justify-content:flex-end">
+      <button class="btn btn-primary" onclick="submitRFQ()">💾 Crear RFQ y Cotización</button>
+    </div>
+  </div>
+
+  <!-- ── PAGE: LISTA DE RFQs ─────────────────────── -->
+  <div id="page-list" class="hidden">
+    <div class="card">
+      <div class="card-title">📄 RFQs creados</div>
+      <button class="btn btn-ghost btn-sm mb-1" onclick="loadRFQList()">↺ Actualizar</button>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr>
+            <th>RFQ ID</th><th>Cliente</th><th>Asesor</th>
+            <th>Fecha</th><th>Cotizaciones</th>
+          </tr></thead>
+          <tbody id="rfq-list-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── PAGE: COTIZACIÓN ────────────────────────── -->
+  <div id="page-cot" class="hidden">
+
+    <div class="card">
+      <div class="card-title">🔍 Cargar Cotización</div>
+      <div class="flex gap-1">
+        <input id="cot-search-id" placeholder="ID de cotización" style="max-width:340px" />
+        <button class="btn btn-secondary" onclick="loadCotizacion()">Cargar</button>
+      </div>
+    </div>
+
+    <div id="cot-loading" class="hidden">
+      <div class="cot-loading">
+        <div class="spinner-ring"></div>
+        <span id="cot-loading-msg">Cargando cotización...</span>
+      </div>
+      <div class="skel-card"><div class="skel-line" style="width:40%"></div><div class="skel-line" style="width:70%"></div><div class="skel-line" style="width:55%"></div></div>
+      <div class="skel-card"><div class="skel-line" style="width:60%"></div><div class="skel-line" style="width:85%"></div><div class="skel-line" style="width:45%"></div><div class="skel-line" style="width:75%"></div></div>
+    </div>
+
+    <div id="cot-editor" class="hidden">
+
+      <div id="disponibilidad-banner" class="hidden"></div>
+
+      <div class="card">
+        <div class="card-title">📊 Detalle de Cotización</div>
+        <div class="form-grid" id="cot-header-info"></div>
+      </div>
+
+      <div id="cot-items-section"></div>
+
+      <div id="seccion-costo-manual" class="card">
+        <div class="card-title">➕ Agregar Costo Manual</div>
+
+        <!-- Fila 1: campos fijos -->
+        <div class="form-grid" style="margin-bottom:.6rem">
+          <div><label>Nombre del costo</label>
+            <input id="new-costo-nombre" placeholder="Ej. Seguro exportación" /></div>
+          <div><label>Tipo</label>
+            <select id="new-costo-tipo">
+              <option value="manual">Manual</option>
+              <option value="logistica">Logística</option>
+              <option value="financiero">Financiero</option>
+            </select>
+          </div>
+          <div><label>Incoterm</label>
+            <select id="new-costo-incoterm">
+              <option value="0">— Sin incoterm —</option>
+              <option value="1">EXW</option>
+              <option value="2">FOB</option>
+              <option value="3">CIF</option>
+              <option value="4" selected>DDP</option>
+            </select></div>
+          <div><label>Moneda</label>
+            <select id="new-costo-moneda">
+              <option value="COP">COP</option>
+              <option value="USD">USD</option>
+              <option value="EUR">EUR</option>
+            </select>
+          </div>
+          <div>
+            <label>Item (cot_item_id)</label>
+            <input id="new-costo-item"
+              placeholder="Dejar vacío para costo global"
+              oninput="onCostoItemChange(this)" />
+          </div>
+        </div>
+
+        <!-- Campos condicionales: ítem específico -->
+        <div id="costo-item-fields" class="form-grid hidden" style="margin-bottom:.6rem;
+          background:#f0ebe3;border:1px solid var(--border);border-radius:var(--radius);padding:.6rem">
+          <div>
+            <label>Costo por</label>
+            <select id="new-costo-por" onchange="onCostoPorChange()">
+              <option value="kg">Por Kg</option>
+              <option value="unidad">Por Unidad</option>
+            </select>
+          </div>
+          <div>
+            <label id="new-costo-valor-label">Valor/Kg</label>
+            <input id="new-costo-valor" type="number" step="0.0001" placeholder="0.00"
+              oninput="onCostoValorChange()" />
+          </div>
+          <div>
+            <label id="new-costo-calc-label">Valor/Und (calculado)</label>
+            <input id="new-costo-calc" type="number" readonly
+              style="background:var(--bg);color:var(--muted)" />
+          </div>
+        </div>
+
+        <!-- Campo condicional: costo global -->
+        <div id="costo-global-field" class="form-grid" style="margin-bottom:.6rem">
+          <div>
+            <label>Valor total</label>
+            <input id="new-costo-valor-global" type="number" step="0.01" placeholder="0.00" />
+          </div>
+        </div>
+
+        <button class="btn btn-ghost btn-sm" onclick="addManualCost()">+ Agregar a lista</button>
+
+        <!-- Lista de costos pendientes -->
+        <div id="pending-costos-wrap" class="hidden" style="margin-top:1rem">
+          <div style="font-size:.82rem;font-weight:700;color:var(--accent2);margin-bottom:.4rem">
+            ⏳ Pendientes de guardar
+          </div>
+          <div class="tbl-wrap">
+            <table>
+              <thead><tr>
+                <th>Nombre</th><th>Tipo</th><th>Incoterm</th><th>Moneda</th>
+                <th>Item</th><th>Valor/Kg</th><th>Valor/Und</th><th>Valor Total</th><th></th>
+              </tr></thead>
+              <tbody id="pending-costos-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div id="botones-cotizacion" class="flex gap-1" style="justify-content:flex-end;margin-top:.5rem">
+        <button class="btn btn-ghost" onclick="resetEditor()">↺ Descartar</button>
+        <button id="btn-imprimir" class="btn btn-ghost" onclick="imprimirCotizacion()" disabled
+          title="Resuelve los ítems sin disponibilidad para imprimir">🖨 Imprimir</button>
+        <button class="btn btn-primary" onclick="saveCotizacion()">💾 Guardar Cotización</button>
+      </div>
+
+      <div class="summary-box mt-1" id="cot-summary"></div>
+    </div>
+  </div>
+
+  <!-- ── PAGE: DIRECTORIO ────────────────────────────────── -->
+  <div id="page-dir" class="hidden">
+    <div class="card">
+      <div class="card-title">🌱 Directorio de Agricultores</div>
+      <button class="btn btn-primary btn-sm mb-1" onclick="agregarFilaDirectorio()">+ Nuevo agricultor</button>
+      <div class="tbl-wrap">
+        <table id="dir-table">
+          <thead><tr>
+            <th>Finca</th>
+            <th>Origen</th>
+            <th>Agricultor</th>
+            <th>Teléfono</th>
+            <th>Correo</th>
+            <th>Contacto preferido</th>
+            <th></th>
+          </tr></thead>
+          <tbody id="dir-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
 </main>
 
-<script>
-// 96 x 384 px PNG, relative to this page. Point it at the file uploaded to GitHub Pages.
-const WATERMARK_URL = "watermark.png";
+<!-- ── Toast ────────────────────────────────────── -->
+<div id="toast"></div>
 
-const TEXT = {
-  es: {
-    msg: "Sigue las huellas de nuestro café, vive una experiencia de sabor única",
-    process: "Proceso:",
-    fixed: "100% Café Arábica. Fabricado por Velvet Greens SAS.",
-  },
-  en: {
-    msg: "Follow the footprints of our coffee, live a unique flavor experience",
-    process: "Process:",
-    fixed: "100% Arabica coffee. Made by Velvet Greens SAS.",
-  },
-};
+<!-- ── Popup resultado RFQ ──────────────────────── -->
+<div id="result-popup">
+  <div class="popup-box">
+    <button class="popup-close" id="popup-close-btn" onclick="closeResultPopup()">✕</button>
+    <div class="popup-icon"  id="popup-icon"></div>
+    <div class="popup-title" id="popup-title"></div>
+    <div class="popup-msg"   id="popup-msg"></div>
+  </div>
+</div>
 
-// All geometry is in CSS px at 96 px per inch: a label is 1 x 5 in, a sheet is US Letter.
-const PAGE = { w: 816, h: 1056 };
-const LABEL = { w: 96, h: 480 };
-const COLS = 7, ROWS = 2, PER_SHEET = COLS * ROWS;
-const GRID = { x: (PAGE.w - COLS * LABEL.w) / 2, y: (PAGE.h - ROWS * LABEL.h) / 2 };
-const PREVIEW_SCALE = 2;
-const PDF_SCALE = 4; // 384 dpi
+<!-- ── Modal editar RFQ ──────────────────────────────────── -->
+<div id="modal-edit-rfq" style="position:fixed;inset:0;background:rgba(0,0,0,.45);
+  z-index:1200;align-items:flex-start;justify-content:center;
+  padding-top:3rem;display:none;overflow-y:auto">
+  <div style="background:var(--surface);border-radius:var(--radius);
+    box-shadow:0 8px 32px rgba(0,0,0,.2);padding:1.5rem;
+    width:90%;max-width:700px;position:relative">
 
-const FONT = "Montserrat, sans-serif";
-const INK = "#3b3833";
-const NAME_INK = "#2a2722";
+    <button onclick="cerrarEditarRFQ()" style="position:absolute;top:.75rem;right:.75rem;
+      background:none;border:none;font-size:1.2rem;cursor:pointer;color:var(--muted)">✕</button>
 
-const state = { lang: "es", traces: [], editing: null, watermark: null, nextId: 1 };
+    <h3 style="color:var(--accent);margin-bottom:1rem">✏️ Editar RFQ</h3>
+    <input type="hidden" id="edit-rfq-id" />
 
-const $ = (s) => document.querySelector(s);
-const form = $("#form");
-const qrField = form.elements.qr;
+    <div class="card" style="margin-bottom:1rem">
+      <div class="card-title">Encabezado</div>
+      <div class="form-grid">
+        <div><label>Cliente</label><input id="edit-rfq-cliente" /></div>
+        <div><label>Asesor</label><input id="edit-rfq-asesor" /></div>
+        <div><label>Fecha</label><input id="edit-rfq-fecha" type="date" /></div>
+        <div><label>Moneda solicitada</label>
+          <select id="edit-rfq-moneda">
+            <option value="USD">USD — Dólar</option>
+            <option value="EUR">EUR — Euro</option>
+            <option value="COP">COP — Peso colombiano</option>
+          </select>
+        </div>
+      </div>
+    </div>
 
-function loadImage(src) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error("not an image"));
-    img.src = src;
-  });
-}
+    <div class="card" style="margin-bottom:1rem">
+      <div class="card-title">Ítems</div>
+      <div id="edit-rfq-items"></div>
+    </div>
 
-function readFile(file) {
-  return new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve(r.result);
-    r.onerror = reject;
-    r.readAsDataURL(file);
-  });
-}
+    <div style="display:flex;justify-content:flex-end;gap:.5rem">
+      <button class="btn btn-ghost" onclick="cerrarEditarRFQ()">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarEditarRFQ()">💾 Guardar cambios</button>
+    </div>
+  </div>
+</div>
 
-// ---------- QR input ----------
-function normalizeQr(raw) {
-  const v = (raw || "").trim().replace(/\s+/g, "");
-  if (!v) return "";
-  if (v.startsWith("data:image/")) return v;
-  if (/^[A-Za-z0-9+/=]+$/.test(v)) return "data:image/png;base64," + v;
-  return null;
-}
+<!-- ── Print container (hidden on screen, rendered when printing) ── -->
+<div id="print-container" aria-hidden="true">
 
-async function refreshThumb() {
-  const thumb = $("#qr-thumb");
-  const src = normalizeQr(qrField.value);
-  if (!src) { thumb.removeAttribute("src"); return; }
-  try { await loadImage(src); thumb.src = src; } catch { thumb.removeAttribute("src"); }
-}
-qrField.addEventListener("input", refreshThumb);
-$("#qr-file").addEventListener("change", async (e) => {
-  const f = e.target.files[0];
-  if (!f) return;
-  qrField.value = await readFile(f);
-  e.target.value = "";
-  refreshThumb();
-});
+  <!-- Page 1: Cover -->
+  <div id="print-cover">
+    <img id="print-cover-bg" src="https://raw.githubusercontent.com/JTunjo/asset_hosting/refs/heads/main/coffee_background.png" alt="" onerror="this.style.display='none'" />
+    <img id="print-cover-logo" src="https://raw.githubusercontent.com/JTunjo/asset_hosting/refs/heads/main/Velvet_color.png" alt="Logo" onerror="this.style.display='none'" />
+    <div id="print-cover-box">
+      <div id="print-cover-title"></div>
+    </div>
+    <div id="print-cover-date"></div>
+  </div>
 
-// ---------- Form ----------
-function resetForm() {
-  form.reset();
-  state.editing = null;
-  $("#form-title").textContent = "New trace";
-  $("#save").textContent = "Add trace";
-  $("#cancel").hidden = true;
-  $("#err").textContent = "";
-  refreshThumb();
-}
+  <!-- Pages 2+: Content -->
+  <div id="print-content">
+    <div id="print-header-section"></div>
 
-form.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const el = form.elements;
-  const err = $("#err");
-  const src = normalizeQr(el.qr.value);
-  if (!src) { err.textContent = "Paste the qr_binary value or upload a QR image."; return; }
-  let qrImg;
-  try { qrImg = await loadImage(src); } catch { err.textContent = "The QR value is not a readable image."; return; }
-  const qty = parseInt(el.qty.value, 10);
-  if (!(qty >= 1)) { err.textContent = "Labels must be 1 or more."; return; }
+    <table id="print-items-table">
+      <thead>
+        <tr>
+          <th>Variedad</th>
+          <th>Origen</th>
+          <th>Fecha requerida</th>
+          <th>Cantidad</th>
+          <th>Presentación</th>
+          <th>Estado Proceso</th>
+          <th id="print-table-currency-header">Gran Total</th>
+        </tr>
+      </thead>
+      <tbody id="print-table-body"></tbody>
+    </table>
 
-  const data = {
-    ref: el.ref.value.trim(),
-    product: el.product.value.trim(),
-    address: el.address.value.trim().split(/\s*\n\s*/).filter(Boolean).join(", "),
-    process: el.process.value.trim(),
-    notes: el.notes.value.trim(),
-    facility: el.facility.value.trim(),
-    qr: src,
-    qrImg,
-    qty,
-  };
-  if (state.editing) {
-    Object.assign(state.traces.find((t) => t.id === state.editing), data);
-  } else {
-    state.traces.push({ id: state.nextId++, ...data });
-  }
-  resetForm();
-  render();
-});
+    <div id="print-grand-total"></div>
+    <div id="print-footer-content"></div>
+  </div>
 
-$("#cancel").addEventListener("click", () => { resetForm(); renderList(); });
+  <!-- Running footer on every page -->
+  <div id="print-page-footer">
+    <img id="print-logo" src="https://raw.githubusercontent.com/JTunjo/asset_hosting/refs/heads/main/Velvet_color.png" alt="Logo" onerror="this.style.display='none'" />
+  </div>
 
-function editTrace(id) {
-  const t = state.traces.find((x) => x.id === id);
-  const el = form.elements;
-  for (const k of ["ref", "qty", "product", "address", "process", "notes", "facility", "qr"]) el[k].value = t[k];
-  state.editing = id;
-  $("#form-title").textContent = "Edit trace";
-  $("#save").textContent = "Save changes";
-  $("#cancel").hidden = false;
-  $("#err").textContent = "";
-  refreshThumb();
-  renderList();
-  form.scrollIntoView({ behavior: "smooth", block: "start" });
-}
+</div>
 
-function deleteTrace(id) {
-  const t = state.traces.find((x) => x.id === id);
-  if (!confirm(`Delete trace ${t.ref}?`)) return;
-  state.traces = state.traces.filter((x) => x.id !== id);
-  if (state.editing === id) resetForm();
-  render();
-}
+<script src="js_api.js"></script>
+<script src="js_ui.js"></script>
+<script src="js_app.js"></script>
 
-// ---------- Watermark ----------
-async function setWatermark(src, label) {
-  try {
-    state.watermark = await loadImage(src);
-    $("#wm-status").textContent = `Using ${label}. Upload a file to replace it for this session.`;
-  } catch {
-    state.watermark = null;
-    $("#wm-status").textContent = `Could not load ${label}; labels print without a watermark. Upload a file to use one.`;
-  }
-  renderPreview();
-}
-$("#wm-file").addEventListener("change", async (e) => {
-  const f = e.target.files[0];
-  if (f) setWatermark(await readFile(f), f.name);
-});
-
-// ---------- Language ----------
-document.querySelectorAll("[data-lang]").forEach((b) =>
-  b.addEventListener("click", () => {
-    state.lang = b.dataset.lang;
-    document.querySelectorAll("[data-lang]").forEach((x) => x.classList.toggle("on", x === b));
-    renderPreview();
-  })
-);
-
-// ---------- Drawing ----------
-function wrap(ctx, text, maxWidth) {
-  const lines = [];
-  let line = "";
-  for (const word of text.split(/\s+/).filter(Boolean)) {
-    const next = line ? line + " " + word : word;
-    if (ctx.measureText(next).width <= maxWidth) { line = next; continue; }
-    if (line) lines.push(line);
-    line = word;
-    // A single word wider than the line is broken by characters.
-    while (ctx.measureText(line).width > maxWidth && line.length > 1) {
-      let i = line.length - 1;
-      while (i > 1 && ctx.measureText(line.slice(0, i)).width > maxWidth) i--;
-      lines.push(line.slice(0, i));
-      line = line.slice(i);
-    }
-  }
-  if (line) lines.push(line);
-  return lines;
-}
-
-// Text block, in the rotated frame: 384 wide (bottom to top of the label) by 96 tall.
-const TXT = { w: 384, h: 96, padL: 12, padR: 10, padT: 6, padB: 6 };
-
-function layoutText(ctx, t, s) {
-  const L = TEXT[state.lang];
-  const width = TXT.w - TXT.padL - TXT.padR;
-  const block = (parts) => parts.flatMap(([text, size, weight, color]) => {
-    ctx.font = `${weight} ${size * s}px ${FONT}`;
-    return wrap(ctx, text, width).map((line) => ({ line, font: ctx.font, size: size * s, color }));
-  });
-  const top = block([
-    [L.msg, 6.6, 400, INK],
-    [`${t.product} - ${t.address}`, 7.6, 700, NAME_INK],
-    [`${L.process} ${t.process}`, 6.8, 600, INK],
-  ]);
-  const bottom = block([
-    [t.notes, 5.6, 400, INK],
-    [L.fixed, 5.6, 400, INK],
-    ...(t.facility ? [[t.facility, 5.6, 400, INK]] : []),
-  ]);
-  const height = (lines) => lines.reduce((h, l) => h + l.size * 1.3, 0);
-  return { top, bottom, fits: height(top) + height(bottom) + 3 <= TXT.h - TXT.padT - TXT.padB, height };
-}
-
-function drawLabel(ctx, t, x, y, guides) {
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.beginPath();
-  ctx.rect(0, 0, LABEL.w, LABEL.h);
-  ctx.clip();
-  ctx.fillStyle = "#fff";
-  ctx.fillRect(0, 0, LABEL.w, LABEL.h);
-  if (state.watermark) ctx.drawImage(state.watermark, 0, 96, 96, 384);
-
-  ctx.imageSmoothingEnabled = false;
-  ctx.drawImage(t.qrImg, 14, 6, 68, 68);
-  ctx.imageSmoothingEnabled = true;
-
-  ctx.fillStyle = "#55504a";
-  ctx.font = `400 10px ${FONT}`;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "alphabetic";
-  if ("letterSpacing" in ctx) ctx.letterSpacing = "0.8px";
-  ctx.fillText(t.ref, LABEL.w / 2, 87);
-  if ("letterSpacing" in ctx) ctx.letterSpacing = "0px";
-
-  // Shrink the text until both groups fit, then put one group at each long edge.
-  let s = 1, lay = layoutText(ctx, t, s);
-  while (!lay.fits && s > 0.55) { s -= 0.03; lay = layoutText(ctx, t, s); }
-
-  ctx.translate(0, LABEL.h);
-  ctx.rotate(-Math.PI / 2);
-  ctx.textAlign = "left";
-  ctx.textBaseline = "alphabetic";
-  let cy = TXT.padT;
-  for (const l of lay.top) {
-    cy += l.size * 1.3;
-    ctx.font = l.font; ctx.fillStyle = l.color;
-    ctx.fillText(l.line, TXT.padL, cy - l.size * 0.3);
-  }
-  cy = TXT.h - TXT.padB - lay.height(lay.bottom);
-  for (const l of lay.bottom) {
-    cy += l.size * 1.3;
-    ctx.font = l.font; ctx.fillStyle = l.color;
-    ctx.fillText(l.line, TXT.padL, cy - l.size * 0.3);
-  }
-  ctx.restore();
-
-  if (guides) {
-    ctx.save();
-    ctx.strokeStyle = "#d6d0c4";
-    ctx.lineWidth = 0.5;
-    ctx.setLineDash([3, 3]);
-    ctx.strokeRect(x + 0.25, y + 0.25, LABEL.w - 0.5, LABEL.h - 0.5);
-    ctx.restore();
-  }
-}
-
-function drawSheet(labels, scale, guides) {
-  const canvas = document.createElement("canvas");
-  canvas.width = PAGE.w * scale;
-  canvas.height = PAGE.h * scale;
-  const ctx = canvas.getContext("2d");
-  ctx.scale(scale, scale);
-  ctx.fillStyle = "#fff";
-  ctx.fillRect(0, 0, PAGE.w, PAGE.h);
-  labels.forEach((t, i) =>
-    drawLabel(ctx, t, GRID.x + (i % COLS) * LABEL.w, GRID.y + Math.floor(i / COLS) * LABEL.h, guides)
-  );
-  return canvas;
-}
-
-function pages() {
-  const labels = state.traces.flatMap((t) => Array(t.qty).fill(t));
-  const out = [];
-  for (let i = 0; i < labels.length; i += PER_SHEET) out.push(labels.slice(i, i + PER_SHEET));
-  return out;
-}
-
-const fontsReady = Promise.all([400, 600, 700].map((w) => document.fonts.load(`${w} 10px Montserrat`))).catch(() => {});
-
-// ---------- Rendering ----------
-async function renderPreview() {
-  await fontsReady;
-  const holder = $("#sheets");
-  const ps = pages();
-  holder.replaceChildren(...ps.map((p) => drawSheet(p, PREVIEW_SCALE, true)));
-
-  const total = state.traces.reduce((n, t) => n + t.qty, 0);
-  const empty = total % PER_SHEET ? PER_SHEET - (total % PER_SHEET) : 0;
-  const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
-  $("#summary").textContent = total
-    ? `${plural(total, "label")} · ${plural(ps.length, "US Letter page")}` +
-      (empty ? ` · ${plural(empty, "empty spot")} on the last page` : "")
-    : "Add a trace to see the sheet preview.";
-  $("#export").disabled = !total;
-}
-
-function node(tag, cls, text) {
-  const n = document.createElement(tag);
-  if (cls) n.className = cls;
-  if (text != null) n.textContent = text;
-  return n;
-}
-
-function renderList() {
-  const ul = $("#traces");
-  ul.replaceChildren();
-  $("#empty").hidden = state.traces.length > 0;
-  state.traces.forEach((t) => {
-    const li = node("li");
-    if (state.editing === t.id) li.className = "editing";
-    const img = node("img");
-    img.src = t.qr;
-    img.alt = "";
-    const info = node("div", "t");
-    info.append(
-      node("b", null, `${t.product} - ${t.address}`),
-      node("span", null, `Ref ${t.ref} · ${t.qty} label${t.qty === 1 ? "" : "s"}`)
-    );
-    const edit = node("button", "btn small", "Edit");
-    edit.type = "button";
-    edit.onclick = () => editTrace(t.id);
-    const del = node("button", "btn small danger", "Delete");
-    del.type = "button";
-    del.onclick = () => deleteTrace(t.id);
-    li.append(img, info, edit, del);
-    ul.append(li);
-  });
-}
-
-function render() { renderList(); renderPreview(); }
-
-// ---------- PDF ----------
-$("#export").addEventListener("click", async () => {
-  const btn = $("#export");
-  btn.disabled = true;
-  btn.textContent = "Building PDF…";
-  try {
-    await fontsReady;
-    const { jsPDF } = window.jspdf;
-    const pdf = new jsPDF({ unit: "in", format: "letter", orientation: "portrait" });
-    pages().forEach((p, i) => {
-      if (i > 0) pdf.addPage("letter", "portrait");
-      pdf.addImage(drawSheet(p, PDF_SCALE, false).toDataURL("image/png"), "PNG", 0, 0, 8.5, 11, undefined, "FAST");
-    });
-    pdf.save(`traza-labels-${state.lang}.pdf`);
-  } catch (e) {
-    alert("Could not build the PDF: " + e.message +
-      (location.protocol === "file:"
-        ? "\n\nOpened as a local file, the browser blocks reading watermark.png. Upload it under Watermark, or open the page from GitHub Pages."
-        : ""));
-  } finally {
-    btn.textContent = "Export PDF";
-    btn.disabled = !state.traces.length;
-  }
-});
-
-setWatermark(WATERMARK_URL, WATERMARK_URL);
-render();
-</script>
 </body>
 </html>
