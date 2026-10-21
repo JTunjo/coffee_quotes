@@ -170,6 +170,7 @@ const GRID = { x: (PAGE.w - COLS * LABEL.w) / 2, y: (PAGE.h - ROWS * LABEL.h) / 
 const PREVIEW_SCALE = 2;
 const PDF_SCALE = 4; // 384 dpi
 
+const PT = 96 / 72; // px per typographic point
 const FONT = "Montserrat, sans-serif";
 const INK = "#3b3833";
 const NAME_INK = "#2a2722";
@@ -345,14 +346,14 @@ function layoutText(ctx, t, s) {
     return wrap(ctx, text, width).map((line) => ({ line, font: ctx.font, size: size * s, color }));
   });
   const top = block([
-    [L.msg, 6.6, 400, INK],
-    [`${t.product} - ${t.address}`, 7.6, 700, NAME_INK],
-    [`${L.process} ${t.process}`, 6.8, 600, INK],
+    [L.msg, 7.2, 400, INK],
+    [`${t.product} - ${t.address}`, 11 * PT, 700, NAME_INK],
+    [`${L.process} ${t.process}`, 10 * PT, 600, INK],
   ]);
   const bottom = block([
-    [t.notes, 5.6, 400, INK],
-    [L.fixed, 5.6, 400, INK],
-    ...(t.facility ? [[t.facility, 5.6, 400, INK]] : []),
+    [t.notes, 6.2, 400, INK],
+    [L.fixed, 6.2, 400, INK],
+    ...(t.facility ? [[t.facility, 6.2, 400, INK]] : []),
   ]);
   const height = (lines) => lines.reduce((h, l) => h + l.size * 1.3, 0);
   return { top, bottom, fits: height(top) + height(bottom) + 3 <= TXT.h - TXT.padT - TXT.padB, height };
